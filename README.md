@@ -12,6 +12,7 @@ I created this because:
 - Remembers shuffle and loop preferences between sessions (defaults: Shuffle On, Loop All).
 - Restores the last played track when available, otherwise falls back to the first track.
 - Offers optional voice announcements for track transitions with customizable voice selection.
+- Shows the current track number in the Now Playing header for quick reference.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
@@ -29,6 +30,7 @@ I created this because:
 - In the Utho Riley folder play “A Classical Approach…” and confirm the announcer says “Now playing, A Classical Approach, by Utho Riley.”
 - In White Bat Audio play “Free Sci-Fi Music…” and confirm it says “Now playing, Phobos Monolith, by White Bat Audio.”
 - Toggle speech off/on during playback to verify announcements resume without disturbing audio when disabled.
+- Start playback and confirm the Now Playing header shows the expected track number, updating as you skip forward or back.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
