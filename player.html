@@ -176,7 +176,7 @@
           <button class="ctrl" id="prevBtn" title="Previous (←)">⏮ Prev</button>
           <button class="ctrl" id="playPauseBtn" title="Space">▶️ Play</button>
           <button class="ctrl" id="nextBtn" title="Next (→)">⏭ Next</button>
-          <button class="ctrl" id="shuffleBtn" aria-pressed="false" title="Toggle Shuffle (S)">🔀 Shuffle</button>
+          <button class="ctrl" id="shuffleBtn" aria-pressed="true" title="Toggle Shuffle (S)">🔀 Shuffle</button>
           <button class="ctrl" id="loopBtn" title="Cycle Loop (L)">🔁 Loop: All</button>
         </div>
 
@@ -220,6 +220,9 @@
   const DB_NAME = 'lwa-player';
   const STORE_NAME = 'handles';
   const LAST_KEY = 'last-folder';
+  const SHUFFLE_KEY = 'shuffle-enabled';
+  const LOOP_KEY = 'loop-mode';
+  const LAST_TRACK_KEY = 'last-track';
   let handleDbPromise = null;
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -243,16 +246,31 @@
     return handleDbPromise;
   };
 
+  const putStoreValue = async (key, value) => {
+    const db = await getHandleDb();
+    if (!db) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(value, key);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const getStoreValue = async (key) => {
+    const db = await getHandleDb();
+    if (!db) return undefined;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  };
+
   const saveLastHandle = async (handle) => {
     try {
-      const db = await getHandleDb();
-      if (!db) return;
-      await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).put(handle, LAST_KEY);
-        tx.oncomplete = resolve;
-        tx.onerror = () => reject(tx.error);
-      });
+      await putStoreValue(LAST_KEY, handle);
     } catch (err) {
       console.error('Failed storing folder handle', err);
     }
@@ -260,14 +278,8 @@
 
   const loadLastHandle = async () => {
     try {
-      const db = await getHandleDb();
-      if (!db) return null;
-      return await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const req = tx.objectStore(STORE_NAME).get(LAST_KEY);
-        req.onsuccess = () => resolve(req.result ?? null);
-        req.onerror = () => reject(req.error);
-      });
+      const handle = await getStoreValue(LAST_KEY);
+      return handle ?? null;
     } catch (err) {
       console.error('Failed loading folder handle', err);
       return null;
@@ -287,10 +299,11 @@
   /** Playlist state */
   let tracks = [];           // {name, displayName, handle, url, duration, path}
   let current = -1;
-  let shuffle = false;       // toggle
+  let shuffle = true;        // toggle
   let loopMode = 'all';      // 'all' | 'one' | 'off'
   let trackRefs = new Map(); // index -> {row, durEl, ancestors}
   let rootDirName = '';
+  const trackKey = (track) => [...track.path, track.name].join('/');
 
   /** Utilities */
   const fmtTime = s => {
@@ -346,12 +359,30 @@
       tracks = [];
     }
 
-    const keyFor = (t) => [...t.path, t.name].join('/');
-    tracks.sort((a, b) => NAME_COLLATOR.compare(keyFor(a), keyFor(b)));
+    tracks.sort((a, b) => NAME_COLLATOR.compare(trackKey(a), trackKey(b)));
 
     renderList();
     countEl.textContent = `${tracks.length} track${tracks.length===1?'':'s'}`;
-    if (tracks.length) { playIndex(0, {autoplay:false}); }
+    if (tracks.length) {
+      let targetIdx = 0;
+      try {
+        const storedKey = await getStoreValue(LAST_TRACK_KEY);
+        if (typeof storedKey === 'string') {
+          const found = tracks.findIndex(t => trackKey(t) === storedKey);
+          if (found >= 0) {
+            targetIdx = found;
+          } else if (shuffle && tracks.length > 1) {
+            targetIdx = Math.floor(Math.random() * tracks.length);
+            console.info('Last known track missing; selecting a random track because shuffle is on.');
+          } else {
+            console.info('Last known track not found; defaulting to first track.');
+          }
+        }
+      } catch (err) {
+        console.error('Failed loading last track', err);
+      }
+      playIndex(targetIdx, {autoplay:false});
+    }
     setFolderPath(dirHandle);
   }
 
@@ -487,6 +518,11 @@
     }
   }
 
+  function applyShuffleState() {
+    shuffleBtn.setAttribute('aria-pressed', String(shuffle));
+    shuffleBtn.classList.toggle('active', shuffle);
+  }
+
   function setLoopLabel() {
     const labels = { all: '🔁 Loop: All', one: '🔂 Loop: One', off: '⏹ Loop: Off' };
     loopBtn.textContent = labels[loopMode];
@@ -503,6 +539,9 @@
     audio.src = tr.url;
     nowTitleEl.textContent = tr.displayName;
     highlightActive();
+    putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
+      console.error('Failed storing last track', err);
+    });
 
     // Reset UI time
     seek.value = 0;
@@ -543,7 +582,31 @@
     return idx;
   }
 
+  const loadPreferences = async () => {
+    try {
+      const storedShuffle = await getStoreValue(SHUFFLE_KEY);
+      if (typeof storedShuffle === 'boolean') shuffle = storedShuffle;
+    } catch (err) {
+      console.error('Failed loading shuffle preference', err);
+    }
+    applyShuffleState();
+
+    try {
+      const storedLoop = await getStoreValue(LOOP_KEY);
+      if (storedLoop === 'all' || storedLoop === 'one' || storedLoop === 'off') {
+        loopMode = storedLoop;
+      }
+    } catch (err) {
+      console.error('Failed loading loop preference', err);
+    }
+    setLoopLabel();
+  };
+
   /** Event wiring */
+  applyShuffleState();
+  setLoopLabel();
+  loadPreferences();
+
   chooseBtn.addEventListener('click', async () => {
     if (!('showDirectoryPicker' in window)) {
       alert('Your browser does not support picking folders. Use a Chromium-based browser like Chrome or Edge.');
@@ -575,15 +638,19 @@
 
   shuffleBtn.addEventListener('click', () => {
     shuffle = !shuffle;
-    shuffleBtn.setAttribute('aria-pressed', String(shuffle));
-    shuffleBtn.classList.toggle('active', shuffle);
+    applyShuffleState();
+    putStoreValue(SHUFFLE_KEY, shuffle).catch(err => {
+      console.error('Failed storing shuffle preference', err);
+    });
   });
 
   loopBtn.addEventListener('click', () => {
     loopMode = loopMode === 'all' ? 'one' : loopMode === 'one' ? 'off' : 'all';
     setLoopLabel();
+    putStoreValue(LOOP_KEY, loopMode).catch(err => {
+      console.error('Failed storing loop preference', err);
+    });
   });
-  setLoopLabel();
 
   // Audio timing UI
   audio.addEventListener('loadedmetadata', () => {
