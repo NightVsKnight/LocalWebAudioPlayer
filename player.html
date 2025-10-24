@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Local MP3 Folder Player</title>
+<style>
+  :root {
+    --bg: #0f1220; --panel:#171a2b; --accent:#7dd3fc; --muted:#9aa3b2; --text:#e8ecf1; --border:#23263a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    color: var(--text); background: radial-gradient(1200px 600px at 70% -10%, #1d2340, var(--bg));
+    min-height: 100dvh; display: grid; place-items: center; padding: 20px;
+  }
+  .app {
+    width: min(980px, 100%); background: color-mix(in oklab, var(--panel) 90%, black 10%);
+    border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.35);
+    overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px 10px;
+    border-bottom: 1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+  }
+  h1 { margin: 0; font-size: 18px; letter-spacing: .3px; font-weight: 600; }
+  .hint { color: var(--muted); font-size: 12px; }
+  .choose { appearance: none; border: 1px solid var(--border); background: #101427; color: var(--text);
+    padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; letter-spacing: .3px;
+  }
+  .choose:hover { border-color: #2b3050; }
+  .wrap {
+    display: grid; grid-template-columns: 1.1fr .9fr; gap: 0; min-height: 460px;
+  }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .player {
+    padding: 18px; display: grid; grid-template-rows: auto auto 1fr; gap: 14px; border-right: 1px solid var(--border);
+  }
+  @media (max-width: 900px) { .player { border-right: none; border-bottom: 1px solid var(--border); } }
+  .now {
+    background: #0f1430; border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+  }
+  .now small { color: var(--muted); display: block; margin-bottom: 6px; }
+  .now strong { display: block; font-size: 16px; line-height: 1.3; }
+  .controls {
+    display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px;
+  }
+  button.ctrl {
+    border: 1px solid var(--border); background: #11162c; color: var(--text);
+    padding: 10px 12px; border-radius: 12px; cursor: pointer; font-weight: 600;
+  }
+  button.ctrl[aria-pressed="true"], button.ctrl.active { outline: 2px solid color-mix(in oklab, var(--accent) 60%, transparent); }
+  button.ctrl:hover { border-color: #2b3050; }
+  .seek {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin-top: 4px;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
+  .list {
+    padding: 12px; overflow: auto; max-height: 560px;
+  }
+  .item {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: 10px; cursor: pointer; user-select: none;
+  }
+  .item:hover { background: rgba(255,255,255,.04); }
+  .item.active { background: rgba(125,211,252,.12); outline: 1px dashed rgba(125,211,252,.35); }
+  .num { color: var(--muted); width: 2ch; text-align: right; }
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  footer {
+    padding: 10px 18px 14px; display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;
+  }
+  .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#0e1327; border:1px solid var(--border);
+    padding: 2px 6px; border-radius: 6px; color: var(--text);
+  }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Local MP3 Folder Player">
+    <header>
+      <div>
+        <h1>Local MP3 Folder Player</h1>
+        <div class="hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</div>
+      </div>
+      <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
+    </header>
+
+    <div class="wrap">
+      <section class="player">
+        <div class="now">
+          <small>Now Playing</small>
+          <strong id="nowTitle">—</strong>
+        </div>
+
+        <div class="controls" role="group" aria-label="Playback controls">
+          <button class="ctrl" id="prevBtn" title="Previous (←)">⏮ Prev</button>
+          <button class="ctrl" id="playPauseBtn" title="Space">▶️ Play</button>
+          <button class="ctrl" id="nextBtn" title="Next (→)">⏭ Next</button>
+          <button class="ctrl" id="shuffleBtn" aria-pressed="false" title="Toggle Shuffle (S)">🔀 Shuffle</button>
+          <button class="ctrl" id="loopBtn" title="Cycle Loop (L)">🔁 Loop: All</button>
+        </div>
+
+        <div class="seek">
+          <input id="seek" type="range" min="0" max="1000" value="0" />
+          <div class="time"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+        </div>
+      </section>
+
+      <aside class="list" id="list" aria-label="Playlist"></aside>
+    </div>
+
+    <footer>
+      <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Prev/Next · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop</div>
+      <div id="count">0 tracks</div>
+    </footer>
+  </div>
+
+  <audio id="audio" class="hide" preload="metadata"></audio>
+
+<script>
+(() => {
+  const chooseBtn   = document.getElementById('chooseBtn');
+  const listEl      = document.getElementById('list');
+  const audio       = document.getElementById('audio');
+  const nowTitleEl  = document.getElementById('nowTitle');
+  const countEl     = document.getElementById('count');
+
+  const prevBtn     = document.getElementById('prevBtn');
+  const playPauseBtn= document.getElementById('playPauseBtn');
+  const nextBtn     = document.getElementById('nextBtn');
+  const shuffleBtn  = document.getElementById('shuffleBtn');
+  const loopBtn     = document.getElementById('loopBtn');
+
+  const seek        = document.getElementById('seek');
+  const tCur        = document.getElementById('tCur');
+  const tTot        = document.getElementById('tTot');
+
+  /** Playlist state */
+  let tracks = [];           // {name, handle, url, duration}
+  let current = -1;
+  let shuffle = false;       // toggle
+  let loopMode = 'all';      // 'all' | 'one' | 'off'
+
+  /** Utilities */
+  const fmtTime = s => {
+    if (!isFinite(s) || s < 0) s = 0;
+    const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+    return `${m}:${ss.toString().padStart(2,'0')}`;
+  };
+
+  const revokeAll = () => {
+    tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
+  };
+
+  async function* walk(dir) {
+    for await (const [name, handle] of dir.entries()) {
+      if (handle.kind === 'file') {
+        if (name.toLowerCase().endsWith('.mp3')) yield handle;
+      } else if (handle.kind === 'directory') {
+        if (!name.startsWith('.')) yield* walk(handle);
+      }
+    }
+  }
+
+  async function scanFolder(dirHandle) {
+    tracks = [];
+    current = -1;
+    revokeAll();
+    listEl.innerHTML = '';
+    nowTitleEl.textContent = '—';
+    countEl.textContent = 'Scanning…';
+
+    for await (const fh of walk(dirHandle)) {
+      const file = await fh.getFile();
+      const url = URL.createObjectURL(file);
+      tracks.push({ name: file.name, handle: fh, url, duration: NaN });
+    }
+
+    // Natural sort by path/name (FileSystemHandle has name only; as a proxy, sort by name)
+    tracks.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:'base'}));
+
+    renderList();
+    countEl.textContent = `${tracks.length} track${tracks.length===1?'':'s'}`;
+    if (tracks.length) { playIndex(0, {autoplay:false}); }
+  }
+
+  function renderList() {
+    listEl.innerHTML = '';
+    tracks.forEach((t, i) => {
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.role = 'button';
+      row.title = t.name;
+      row.setAttribute('data-index', i);
+
+      const n = document.createElement('div'); n.className = 'num'; n.textContent = i+1;
+      const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = t.name.replace(/\.mp3$/i,'');
+      const d = document.createElement('div'); d.className = 'dur'; d.textContent = '';
+
+      row.append(n, nm, d);
+      row.addEventListener('click', () => playIndex(i, {autoplay:true}));
+      listEl.appendChild(row);
+
+      // Preload metadata for duration display, without loading full audio
+      const tmp = new Audio();
+      tmp.preload = 'metadata';
+      tmp.src = t.url;
+      tmp.addEventListener('loadedmetadata', () => {
+        t.duration = tmp.duration;
+        d.textContent = isFinite(t.duration) ? fmtTime(t.duration) : '';
+        tmp.src = ''; // release
+      }, {once:true});
+    });
+    highlightActive();
+  }
+
+  function highlightActive() {
+    [...listEl.children].forEach(el => el.classList.remove('active'));
+    if (current >= 0) {
+      const el = listEl.querySelector(`.item[data-index="${current}"]`);
+      if (el) el.classList.add('active');
+    }
+  }
+
+  function setLoopLabel() {
+    const labels = { all: '🔁 Loop: All', one: '🔂 Loop: One', off: '⏹ Loop: Off' };
+    loopBtn.textContent = labels[loopMode];
+    audio.loop = (loopMode === 'one');
+  }
+
+  async function playIndex(idx, {autoplay=true} = {}) {
+    if (!tracks.length) return;
+    if (idx < 0) idx = 0;
+    if (idx >= tracks.length) idx = tracks.length - 1;
+    current = idx;
+
+    const tr = tracks[current];
+    audio.src = tr.url;
+    nowTitleEl.textContent = tr.name.replace(/\.mp3$/i,'');
+    highlightActive();
+
+    // Reset UI time
+    seek.value = 0;
+    tCur.textContent = '0:00';
+    tTot.textContent = isFinite(tr.duration) ? fmtTime(tr.duration) : '0:00';
+
+    if (autoplay) {
+      try { await audio.play(); playPauseBtn.textContent = '⏸ Pause'; }
+      catch(e){ /* ignore autoplay block */ }
+    } else {
+      playPauseBtn.textContent = '▶️ Play';
+    }
+  }
+
+  function nextIndex() {
+    if (!tracks.length) return current;
+    if (shuffle && tracks.length > 1) {
+      // random but avoid immediate repeat
+      let idx;
+      do { idx = Math.floor(Math.random() * tracks.length); } while (idx === current);
+      return idx;
+    }
+    // linear advance, wrap if loop all, else clamp at end (handled in ended)
+    let idx = current + 1;
+    if (idx >= tracks.length) idx = 0;
+    return idx;
+  }
+
+  function prevIndex() {
+    if (!tracks.length) return current;
+    if (shuffle && tracks.length > 1) {
+      let idx;
+      do { idx = Math.floor(Math.random() * tracks.length); } while (idx === current);
+      return idx;
+    }
+    let idx = current - 1;
+    if (idx < 0) idx = tracks.length - 1;
+    return idx;
+  }
+
+  /** Event wiring */
+  chooseBtn.addEventListener('click', async () => {
+    if (!('showDirectoryPicker' in window)) {
+      alert('Your browser does not support picking folders. Use a Chromium-based browser like Chrome or Edge.');
+      return;
+    }
+    try {
+      const dir = await window.showDirectoryPicker({ id: 'mp3-player-root' });
+      const perm = await dir.requestPermission({ mode: 'read' });
+      if (perm === 'granted') await scanFolder(dir);
+      else alert('Read permission was not granted.');
+    } catch (e) {
+      if (e?.name !== 'AbortError') console.error(e);
+    }
+  });
+
+  playPauseBtn.addEventListener('click', async () => {
+    if (!tracks.length) return;
+    if (audio.paused) {
+      try { await audio.play(); playPauseBtn.textContent = '⏸ Pause'; } catch(e){}
+    } else {
+      audio.pause(); playPauseBtn.textContent = '▶️ Play';
+    }
+  });
+
+  nextBtn.addEventListener('click', () => playIndex(nextIndex(), {autoplay:true}));
+  prevBtn.addEventListener('click', () => playIndex(prevIndex(), {autoplay:true}));
+
+  shuffleBtn.addEventListener('click', () => {
+    shuffle = !shuffle;
+    shuffleBtn.setAttribute('aria-pressed', String(shuffle));
+    shuffleBtn.classList.toggle('active', shuffle);
+  });
+
+  loopBtn.addEventListener('click', () => {
+    loopMode = loopMode === 'all' ? 'one' : loopMode === 'one' ? 'off' : 'all';
+    setLoopLabel();
+  });
+  setLoopLabel();
+
+  // Audio timing UI
+  audio.addEventListener('loadedmetadata', () => {
+    tTot.textContent = fmtTime(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    const pos = Math.round((audio.currentTime / audio.duration) * 1000);
+    seek.value = String(pos);
+    tCur.textContent = fmtTime(audio.currentTime);
+  });
+  seek.addEventListener('input', () => {
+    if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    const pos = Number(seek.value) / 1000;
+    audio.currentTime = audio.duration * pos;
+  });
+
+  // Track end behavior
+  audio.addEventListener('ended', () => {
+    // If loop one is set, audio.loop handles it.
+    if (loopMode === 'one') return;
+    // Loop all or off:
+    if (shuffle || loopMode === 'all') {
+      playIndex(nextIndex(), {autoplay:true});
+    } else {
+      // Off: if not last, go next; if last, stop at end.
+      if (current < tracks.length - 1) playIndex(current + 1, {autoplay:true});
+      else { playPauseBtn.textContent = '▶️ Play'; }
+    }
+  });
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown', (e) => {
+    if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.code === 'Space') { e.preventDefault(); playPauseBtn.click(); }
+    else if (e.key === 'ArrowRight') nextBtn.click();
+    else if (e.key === 'ArrowLeft') prevBtn.click();
+    else if (e.key.toLowerCase() === 's') shuffleBtn.click();
+    else if (e.key.toLowerCase() === 'l') loopBtn.click();
+  });
+
+  // Clean up object URLs when leaving
+  window.addEventListener('beforeunload', revokeAll);
+})();
+</script>
+</body>
+</html>
