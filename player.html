@@ -310,10 +310,8 @@
   const speech = createSpeechSynth();
   let announceEnabled = speech.supported;
   let pendingAnnouncement = null;
-  let lastStartedTitle = null;
-  let lastSpokenTrackId = null;
-  let activeAnnouncementId = null;
-  let previousTitleForAnnouncement = null;
+  let lastAnnouncedTitle = null;
+  let lastAnnouncedTrackKey = null;
 
   /** Utilities */
   const fmtTime = s => {
@@ -321,8 +319,7 @@
     const m = Math.floor(s / 60), ss = Math.floor(s % 60);
     return `${m}:${ss.toString().padStart(2,'0')}`;
   };
-  const trackIdentifier = (track) => track ? [...track.path, track.name].join('/') : '';
-
+  // Converts filenames such as "01 Artist - Title" into a speech-friendly "Title, by Artist".
   const formatAnnouncementTitle = (name) => {
     if (!name) return 'Unknown track';
     const cleaned = name.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -344,33 +341,33 @@
       pendingAnnouncement = null;
       return;
     }
-    const id = trackIdentifier(track);
-    const title = formatAnnouncementTitle(track.displayName);
-    const trackChanged = id !== activeAnnouncementId;
-    if (trackChanged) {
-      previousTitleForAnnouncement = lastStartedTitle;
-      lastStartedTitle = title;
-      activeAnnouncementId = id;
-    }
-    pendingAnnouncement = { id, title };
+    pendingAnnouncement = {
+      key: trackKey(track),
+      title: formatAnnouncementTitle(track.displayName),
+    };
   };
 
   const maybeAnnounceCurrentTrack = () => {
     if (!pendingAnnouncement) return;
-    const { id, title } = pendingAnnouncement;
+    const { key, title } = pendingAnnouncement;
     pendingAnnouncement = null;
     if (!title) return;
-    const alreadySpoken = id === lastSpokenTrackId;
-    if (!announceEnabled || !speech.supported || alreadySpoken) {
-      return;
+
+    // Announcements are disabled by the user.
+    if (!announceEnabled) return;
+    // Speech synthesis is not available in this browser.
+    if (!speech.supported) return;
+    // Avoid repeating the same announcement if the track restarts.
+    if (key === lastAnnouncedTrackKey) return;
+
+    let message = '';
+    if (lastAnnouncedTitle && lastAnnouncedTitle !== title) {
+      message = `That was ${lastAnnouncedTitle}. `;
     }
-    let msg = '';
-    if (previousTitleForAnnouncement && previousTitleForAnnouncement !== title) {
-      msg = `That was ${previousTitleForAnnouncement}. `;
-    }
-    msg += `Now playing: ${title}`;
-    speech.speak(msg, { interrupt: true });
-    lastSpokenTrackId = id;
+    message += `Now playing: ${title}`;
+    speech.speak(message, { interrupt: true });
+    lastAnnouncedTitle = title;
+    lastAnnouncedTrackKey = key;
   };
 
   const readAnnouncePreference = () => {
@@ -399,7 +396,8 @@
     if (!effective) {
       speech.cancel();
     } else if (audio && !audio.paused && current >= 0 && tracks[current]) {
-      // Make sure we announce the current track if playback is already running.
+      // Allow a fresh announcement when the toggle is re-enabled mid-track.
+      lastAnnouncedTrackKey = null;
       recordPendingAnnouncement(tracks[current]);
       maybeAnnounceCurrentTrack();
     }
@@ -416,31 +414,45 @@
       };
     }
 
-    const desiredVoiceName = 'Daniel (English (United Kingdom))';
+    // Prefer Daniel for consistent pacing; fall back to any English voice, then any remaining option.
+    const PREFERRED_VOICE_NAMES = [
+      'Daniel (English (United Kingdom))',
+      'Daniel (English (United States))',
+      'Daniel',
+    ];
     let voice = null;
     let queued = null;
+    let awaitingVoices = false;
 
     function pickVoice() {
       const voices = synth.getVoices();
       if (!voices.length) return null;
-      voice = voices.find(v => v.name === desiredVoiceName)
+      voice = voices.find(v => PREFERRED_VOICE_NAMES.includes(v.name))
         || voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en') && v.localService)
         || voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en'))
         || voices[0];
       return voice;
     }
 
+    function handleVoicesChanged() {
+      if (voice) return;
+      if (!pickVoice()) return;
+      synth.removeEventListener('voiceschanged', handleVoicesChanged);
+      awaitingVoices = false;
+      if (queued) {
+        const { text, opts } = queued;
+        queued = null;
+        speak(text, opts);
+      }
+    }
+
     function ensureVoice() {
       if (voice) return true;
       if (pickVoice()) return true;
-      synth.onvoiceschanged = () => {
-        synth.onvoiceschanged = null;
-        if (pickVoice() && queued) {
-          const { text, opts } = queued;
-          queued = null;
-          speak(text, opts);
-        }
-      };
+      if (!awaitingVoices) {
+        awaitingVoices = true;
+        synth.addEventListener('voiceschanged', handleVoicesChanged);
+      }
       return false;
     }
 
@@ -450,7 +462,8 @@
         queued = { text, opts };
         return;
       }
-      if (opts.interrupt !== false) synth.cancel();
+      const shouldInterrupt = opts.interrupt ?? true;
+      if (shouldInterrupt) synth.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       if (voice) {
         utter.voice = voice;
@@ -494,10 +507,8 @@
     tracks = [];
     current = -1;
     pendingAnnouncement = null;
-    lastSpokenTrackId = null;
-    lastStartedTitle = null;
-    activeAnnouncementId = null;
-    previousTitleForAnnouncement = null;
+    lastAnnouncedTitle = null;
+    lastAnnouncedTrackKey = null;
     revokeAll();
     listEl.innerHTML = '';
     nowTitleEl.textContent = '—';

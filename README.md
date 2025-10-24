@@ -15,6 +15,7 @@ I created this because:
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
 - The player prefers the `Daniel (English (United Kingdom))` voice and falls back to the first available English voice exposed by your browser.
+- To prefer a different voice, tweak the `PREFERRED_VOICE_NAMES` list in `player.html`.
 - When speech synthesis is unavailable the control is disabled; playback continues silently.
 
 ## Manual Testing
