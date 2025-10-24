@@ -77,26 +77,54 @@
     background: linear-gradient(180deg, rgba(13, 20, 48, 0.46), transparent);
   }
   @media (max-width: 900px) { .player { border-right: none; border-bottom: 1px solid var(--border); } }
+
+  /* Now area: simple 2x2 grid */
   .now {
+    display: grid;
+    grid-template-columns: auto 1fr;   /* label | artist/title column */
+    grid-template-rows: auto auto;     /* top row = label+artist, bottom row = track# + title */
+    gap: 6px 12px;
+    align-items: center;
     background: rgba(11, 18, 46, 0.84); border: 1px solid var(--border); border-radius: 14px; padding: 14px;
     box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
   }
-  .now small {
+  /* Top-left: label */
+  .now-label {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
     color: color-mix(in srgb, var(--muted) 40%, var(--accent) 60%);
-    display: block; margin-bottom: 8px;
+    margin: 0;
     font-size: 16px; font-weight: 600; letter-spacing: .8px;
+    align-self: center;
   }
-  .now strong {
-    display: flex; align-items: center; gap: 12px;
-    font-size: 16px; line-height: 1.3;
+  /* Top-right: artist fills remaining width and is right-justified */
+  .now-artist {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    color: var(--muted);
+    margin: 0;
+    font-size: 17px; font-weight: 600;
+    line-height: 1.1;
   }
+  /* Bottom-left: track number */
   .now-num {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+    justify-self: center;   /* center within that cell */
     min-width: var(--now-num-min, 4ch); font-variant-numeric: tabular-nums;
     color: var(--accent); letter-spacing: .6px;
     display: inline-flex; align-items: center; justify-content: center;
     padding: 8px var(--now-num-pad-x, 12px); border-radius: 999px; border: 1px solid rgba(93, 251, 255, 0.28);
     background: rgba(93, 251, 255, 0.12); font-weight: 600; line-height: 1;
   }
+  /* Bottom-right: title fills remaining width and ellipses when needed */
+  .now-title {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    color: var(--text);
+    font-weight: 600;
+  }
+
   .controls {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--ctrl-min), 1fr)); gap: 10px;
   }
@@ -208,12 +236,12 @@
 
     <div class="wrap">
       <section class="player">
-        <div class="now">
-          <small>Now Playing:</small>
-          <strong>
-            <span id="nowTrackNumber" class="now-num">—</span>
-            <span id="nowTitle">—</span>
-          </strong>
+        <div class="now" role="group" aria-labelledby="nowLabel">
+          <small id="nowLabel" class="now-label">Now Playing:</small>
+          <span id="nowArtist" class="now-artist">—</span>
+
+          <span id="nowTrackNumber" class="now-num">—</span>
+          <span id="nowTitle" class="now-title" aria-live="polite" aria-atomic="true">—</span>
         </div>
 
         <div class="controls" role="group" aria-label="Playback controls">
@@ -261,6 +289,7 @@
   const listEl      = document.getElementById('list');
   const audio       = document.getElementById('audio');
   const nowTitleEl  = document.getElementById('nowTitle');
+  const nowArtistEl = document.getElementById('nowArtist');
   const nowTrackNumberEl = document.getElementById('nowTrackNumber');
   const countEl     = document.getElementById('count');
 
@@ -724,7 +753,7 @@
   const recordPendingAnnouncement = (track) => {
     if (!track) {
       pendingAnnouncement = null;
-      return;
+      return null;
     }
     const details = buildAnnouncementDetails(track);
     const { title = '', artist = '', summary = '' } = details || {};
@@ -734,6 +763,7 @@
       artist,
       summary,
     };
+    return details;
   };
 
   const maybeAnnounceCurrentTrack = () => {
@@ -955,6 +985,7 @@
     revokeAll();
     listEl.innerHTML = '';
     if (nowTitleEl) nowTitleEl.textContent = '—';
+    if (nowArtistEl) nowArtistEl.textContent = '—';
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = '—';
     applyNowTrackMetrics();
     countEl.textContent = 'Scanning…';
@@ -1172,9 +1203,10 @@
     current = idx;
 
     const tr = tracks[current];
-    recordPendingAnnouncement(tr);
+    const details = recordPendingAnnouncement(tr);
     audio.src = tr.url;
     if (nowTitleEl) nowTitleEl.textContent = tr.displayName;
+    if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = fmtTrackNumber(current);
     highlightActive();
     putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
