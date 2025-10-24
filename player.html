@@ -370,7 +370,7 @@
     const parts = normalized.split(' - ');
     let title = parts.length >= 2 ? normalizeSpaces(parts.slice(1).join(' - ')) : fallbackName;
     if (!title) title = fallbackName;
-    let artist = parts.length >= 2 ? normalizeSpaces(parts[0].replace(/^\d+\s*/, '')) : fallbackArtist;
+    let artist = parts.length >= 2 ? normalizeSpaces(parts[0].replace(/^\d+[\s.\-]*/, '')) : fallbackArtist;
     if (!artist) artist = fallbackArtist;
     title = normalizeSpaces(title) || 'Unknown track';
     artist = normalizeSpaces(artist);
