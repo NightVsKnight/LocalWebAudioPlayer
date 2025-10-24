@@ -313,6 +313,9 @@
   let pendingAnnouncement = null;
   let lastAnnouncedSummary = null;
   let lastAnnouncedTrackKey = null;
+  let announceTimer = null;
+
+  const ANNOUNCE_DEBOUNCE_MS = 250;
 
   /** Utilities */
   const fmtTime = s => {
@@ -408,9 +411,21 @@
       message = `That was: ${lastAnnouncedSummary}. `;
     }
     message += `Now playing: ${summary}`;
-    speech.speak(message, { interrupt: true });
-    lastAnnouncedSummary = summary;
-    lastAnnouncedTrackKey = key;
+    if (announceTimer) {
+      clearTimeout(announceTimer);
+      announceTimer = null;
+    }
+    const dispatchAnnouncement = () => {
+      speech.speak(message, { interrupt: true });
+      lastAnnouncedSummary = summary;
+      lastAnnouncedTrackKey = key;
+      announceTimer = null;
+    };
+    if (ANNOUNCE_DEBOUNCE_MS > 0) {
+      announceTimer = setTimeout(dispatchAnnouncement, ANNOUNCE_DEBOUNCE_MS);
+    } else {
+      dispatchAnnouncement();
+    }
   };
 
   const readAnnouncePreference = () => {
@@ -438,6 +453,10 @@
     }
     if (!effective) {
       speech.cancel();
+      if (announceTimer) {
+        clearTimeout(announceTimer);
+        announceTimer = null;
+      }
     } else if (audio && !audio.paused && current >= 0 && tracks[current]) {
       // Allow a fresh announcement when the toggle is re-enabled mid-track.
       lastAnnouncedTrackKey = null;
@@ -552,6 +571,10 @@
     pendingAnnouncement = null;
     lastAnnouncedSummary = null;
     lastAnnouncedTrackKey = null;
+    if (announceTimer) {
+      clearTimeout(announceTimer);
+      announceTimer = null;
+    }
     revokeAll();
     listEl.innerHTML = '';
     nowTitleEl.textContent = '—';

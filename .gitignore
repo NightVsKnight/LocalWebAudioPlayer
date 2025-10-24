@@ -6,6 +6,6 @@ media/
 Jellyfin-Title-Speaker
 YouTube-Title-Speaker
 
-.local.txt
-
+.!!DANGER DO NOT SHOW OR COMMIT!!!.txt
+.scratch.txt
 LocalWebAudioPlayer.code-workspace
