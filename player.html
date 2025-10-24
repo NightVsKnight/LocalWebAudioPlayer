@@ -79,6 +79,23 @@
     padding: 2px 6px; border-radius: 6px; color: var(--text);
   }
   .hide { display: none !important; }
+  .tree-root { margin-top: 4px; }
+  details.tree-dir { padding-left: 0; margin: 2px 0 2px; }
+  details.tree-dir > summary {
+    cursor: pointer; padding: 6px 10px; border-radius: 8px;
+    list-style: none; display: flex; align-items: center; gap: 8px;
+    color: var(--muted); background: transparent;
+  }
+  details.tree-dir > summary::before {
+    content: '📁'; font-size: 14px;
+  }
+  details.tree-dir > summary::-webkit-details-marker { display: none; }
+  details.tree-dir[open] > summary { color: var(--text); background: rgba(255,255,255,.03); }
+  details.tree-dir > summary:hover { background: rgba(255,255,255,.05); color: var(--text); }
+  .tree-children { margin-left: 18px; border-left: 1px solid rgba(255,255,255,.08); padding-left: 10px; }
+  .tree-children .item { margin: 2px 0; }
+  .tree-children .num { min-width: 2.5ch; color: var(--muted); text-align: right; }
+  .track-item { margin: 2px 0; }
 </style>
 </head>
 <body>
@@ -148,6 +165,7 @@
   const STORE_NAME = 'handles';
   const LAST_KEY = 'last-folder';
   let handleDbPromise = null;
+  const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
   const getHandleDb = () => {
     if (!('indexedDB' in window)) return null;
@@ -211,10 +229,12 @@
   };
 
   /** Playlist state */
-  let tracks = [];           // {name, handle, url, duration}
+  let tracks = [];           // {name, displayName, handle, url, duration, path}
   let current = -1;
   let shuffle = false;       // toggle
   let loopMode = 'all';      // 'all' | 'one' | 'off'
+  let trackRefs = new Map(); // index -> {row, durEl, ancestors}
+  let rootDirName = '';
 
   /** Utilities */
   const fmtTime = s => {
@@ -227,18 +247,23 @@
     tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
   };
 
-  async function* walk(dir) {
+  async function* walk(dir, path = []) {
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind === 'file') {
-        if (name.toLowerCase().endsWith('.mp3')) yield handle;
+        if (name.toLowerCase().endsWith('.mp3')) {
+          yield { name, handle, path };
+        }
       } else if (handle.kind === 'directory') {
-        if (!name.startsWith('.')) yield* walk(handle);
+        if (!name.startsWith('.')) {
+          yield* walk(handle, [...path, name]);
+        }
       }
     }
   }
 
   async function scanFolder(dirHandle) {
     setFolderPath(dirHandle, { loading: true });
+    rootDirName = dirHandle?.name || 'Selected Folder';
     tracks = [];
     current = -1;
     revokeAll();
@@ -247,18 +272,26 @@
     countEl.textContent = 'Scanning…';
 
     try {
-      for await (const fh of walk(dirHandle)) {
+      for await (const entry of walk(dirHandle)) {
+        const { handle: fh, path } = entry;
         const file = await fh.getFile();
         const url = URL.createObjectURL(file);
-        tracks.push({ name: file.name, handle: fh, url, duration: NaN });
+        tracks.push({
+          name: file.name,
+          displayName: file.name.replace(/\.mp3$/i, ''),
+          handle: fh,
+          url,
+          duration: NaN,
+          path: [...path],
+        });
       }
     } catch (err) {
       console.error('Failed scanning folder', err);
       tracks = [];
     }
 
-    // Natural sort by path/name (FileSystemHandle has name only; as a proxy, sort by name)
-    tracks.sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:'base'}));
+    const keyFor = (t) => [...t.path, t.name].join('/');
+    tracks.sort((a, b) => NAME_COLLATOR.compare(keyFor(a), keyFor(b)));
 
     renderList();
     countEl.textContent = `${tracks.length} track${tracks.length===1?'':'s'}`;
@@ -267,40 +300,134 @@
   }
 
   function renderList() {
+    trackRefs = new Map();
     listEl.innerHTML = '';
-    tracks.forEach((t, i) => {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.role = 'button';
-      row.title = t.name;
-      row.setAttribute('data-index', i);
+    if (!tracks.length) {
+      highlightActive();
+      return;
+    }
 
-      const n = document.createElement('div'); n.className = 'num'; n.textContent = i+1;
-      const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = t.name.replace(/\.mp3$/i,'');
-      const d = document.createElement('div'); d.className = 'dur'; d.textContent = '';
+    const tree = buildTrackTree();
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tree-root';
 
-      row.append(n, nm, d);
-      row.addEventListener('click', () => playIndex(i, {autoplay:true}));
-      listEl.appendChild(row);
+    const topDirs = Array.from(tree.dirs.values()).sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
+    topDirs.forEach(dir => wrapper.appendChild(renderDirNode(dir, 0, [])));
 
-      // Preload metadata for duration display, without loading full audio
-      const tmp = new Audio();
-      tmp.preload = 'metadata';
-      tmp.src = t.url;
-      tmp.addEventListener('loadedmetadata', () => {
-        t.duration = tmp.duration;
-        d.textContent = isFinite(t.duration) ? fmtTime(t.duration) : '';
-        tmp.src = ''; // release
-      }, {once:true});
-    });
+    const rootFiles = tree.files.slice().sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
+    rootFiles.forEach(file => wrapper.appendChild(renderTrackLeaf(file.index, [])));
+
+    listEl.appendChild(wrapper);
     highlightActive();
   }
 
+  function buildTrackTree() {
+    const root = { name: rootDirName, dirs: new Map(), files: [] };
+    tracks.forEach((track, index) => {
+      let node = root;
+      track.path.forEach(segment => {
+        if (!node.dirs.has(segment)) {
+          node.dirs.set(segment, { name: segment, dirs: new Map(), files: [] });
+        }
+        node = node.dirs.get(segment);
+      });
+      node.files.push({ name: track.name, index });
+    });
+    return root;
+  }
+
+  function renderDirNode(node, depth, ancestors) {
+    const details = document.createElement('details');
+    details.className = 'tree-dir';
+    if (depth < 1) details.open = true;
+
+    const summary = document.createElement('summary');
+    summary.textContent = node.name;
+    details.appendChild(summary);
+
+    const children = document.createElement('div');
+    children.className = 'tree-children';
+    const nextAncestors = ancestors.concat(details);
+
+    const subDirs = Array.from(node.dirs.values()).sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
+    subDirs.forEach(child => children.appendChild(renderDirNode(child, depth + 1, nextAncestors)));
+
+    const files = node.files.slice().sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
+    files.forEach(file => children.appendChild(renderTrackLeaf(file.index, nextAncestors)));
+
+    if (children.children.length) details.appendChild(children);
+    return details;
+  }
+
+  function renderTrackLeaf(index, ancestors) {
+    const track = tracks[index];
+    const row = document.createElement('div');
+    row.className = 'item track-item';
+    row.dataset.index = index;
+    row.role = 'button';
+    row.tabIndex = 0;
+    const relative = track.path.length ? `${track.path.join('/')}/${track.name}` : track.name;
+    row.title = relative;
+
+    const icon = document.createElement('div');
+    icon.className = 'num';
+    icon.textContent = index + 1;
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = track.displayName;
+
+    const durEl = document.createElement('div');
+    durEl.className = 'dur';
+    durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
+
+    row.append(icon, nameEl, durEl);
+    row.addEventListener('click', () => playIndex(index, {autoplay:true}));
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        playIndex(index, {autoplay:true});
+      }
+    });
+
+    trackRefs.set(index, { row, durEl, ancestors });
+    if (!isFinite(track.duration)) {
+      primeDuration(index, durEl);
+    }
+
+    return row;
+  }
+
+  function primeDuration(index, durEl) {
+    const track = tracks[index];
+    const tmp = new Audio();
+    tmp.preload = 'metadata';
+    tmp.src = track.url;
+    const clearTmp = () => {
+      tmp.src = '';
+      try { tmp.load(); } catch (_) {}
+    };
+    tmp.addEventListener('loadedmetadata', () => {
+      track.duration = tmp.duration;
+      if (durEl.isConnected) {
+        durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
+      }
+      clearTmp();
+    }, {once:true});
+    tmp.addEventListener('error', clearTmp, {once:true});
+  }
+
   function highlightActive() {
-    [...listEl.children].forEach(el => el.classList.remove('active'));
-    if (current >= 0) {
-      const el = listEl.querySelector(`.item[data-index="${current}"]`);
-      if (el) el.classList.add('active');
+    trackRefs.forEach(ref => ref.row.classList.remove('active'));
+    if (current < 0) return;
+    const ref = trackRefs.get(current);
+    if (!ref) return;
+    ref.row.classList.add('active');
+    ref.ancestors.forEach(det => {
+      if (det && !det.open) det.open = true;
+    });
+    if (ref.row.isConnected) {
+      ref.row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }
 
@@ -318,7 +445,7 @@
 
     const tr = tracks[current];
     audio.src = tr.url;
-    nowTitleEl.textContent = tr.name.replace(/\.mp3$/i,'');
+    nowTitleEl.textContent = tr.displayName;
     highlightActive();
 
     // Reset UI time

@@ -5,3 +5,7 @@ media/
 
 Jellyfin-Title-Speaker
 YouTube-Title-Speaker
+
+.local.txt
+
+LocalWebAudioPlayer.code-workspace
