@@ -25,8 +25,8 @@ I created this because:
 - Load an MP3 folder, start playback, and confirm the announcer introduces the first track.
 - Skip to another track and listen for the "That was ... Now playing ..." transition.
 - Turn `🗣 Announce` off, verify no further transitions are spoken, then turn it back on and change tracks to hear the announcer again.
-- In the Utho Riley folder play “A Classical Approach…” and confirm the announcer says “Now playing: A Classical Approach, by Utho Riley.”
-- In White Bat Audio play “Free Sci-Fi Music…” and confirm it says “Now playing: Phobos Monolith, by White Bat Audio.”
+- In the Utho Riley folder play “A Classical Approach…” and confirm the announcer says “Now playing, A Classical Approach, by Utho Riley.”
+- In White Bat Audio play “Free Sci-Fi Music…” and confirm it says “Now playing, Phobos Monolith, by White Bat Audio.”
 - Toggle speech off/on during playback to verify announcements resume without disturbing audio when disabled.
 
 ## Media
