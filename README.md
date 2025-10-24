@@ -13,6 +13,7 @@ I created this because:
 - Restores the last played track when available, otherwise falls back to the first track.
 - Offers optional voice announcements for track transitions with customizable voice selection.
 - Shows the current track number in the Now Playing header for quick reference.
+- Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo). The selector is disabled if the browser lacks AudioContext support.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
@@ -31,6 +32,7 @@ I created this because:
 - In White Bat Audio play “Free Sci-Fi Music…” and confirm it says “Now playing, Phobos Monolith, by White Bat Audio.”
 - Toggle speech off/on during playback to verify announcements resume without disturbing audio when disabled.
 - Start playback and confirm the Now Playing header shows the expected track number, updating as you skip forward or back.
+- Start playback, open the Spectrum Analyzer selector, and confirm Neon Bars, Glow Wave, and Pulse Halo update live without interrupting audio. Pause playback and ensure the visualization stops animating until playback resumes.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
