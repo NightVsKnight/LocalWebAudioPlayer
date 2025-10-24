@@ -331,6 +331,8 @@
   let pendingAnnouncement = null;
   let lastAnnouncedSummary = null;
   let lastAnnouncedTrackKey = null;
+  let lastAnnouncedArtist = null;
+  let lastAnnouncedTitle = null;
   let announceTimer = null;
 
   const applyNowTrackMetrics = () => {
@@ -429,15 +431,18 @@
       return;
     }
     const details = buildAnnouncementDetails(track);
+    const { title = '', artist = '', summary = '' } = details || {};
     pendingAnnouncement = {
       key: trackKey(track),
-      summary: details.summary,
+      title,
+      artist,
+      summary,
     };
   };
 
   const maybeAnnounceCurrentTrack = () => {
     if (!pendingAnnouncement) return;
-    const { key, summary } = pendingAnnouncement;
+    const { key, summary, artist, title } = pendingAnnouncement;
     pendingAnnouncement = null;
     if (!summary) return;
 
@@ -450,9 +455,25 @@
 
     let message = '';
     if (lastAnnouncedSummary && lastAnnouncedSummary !== summary) {
-      message = `That was ${lastAnnouncedSummary}. `;
+      let previousDescription = lastAnnouncedSummary;
+      if (lastAnnouncedTitle) {
+        const includePrevArtist = Boolean(lastAnnouncedArtist) &&
+          (!artist || NAME_COLLATOR.compare(lastAnnouncedArtist, artist) !== 0);
+        previousDescription = includePrevArtist
+          ? `${lastAnnouncedTitle}, by ${lastAnnouncedArtist}`
+          : lastAnnouncedTitle;
+      }
+      if (previousDescription) {
+        message = `That was ${previousDescription}. `;
+      }
     }
-    message += `Now playing, ${summary}`;
+    let sameArtist = false;
+    if (artist && lastAnnouncedArtist) {
+      sameArtist = (NAME_COLLATOR.compare(artist, lastAnnouncedArtist) === 0);
+    }
+    const shouldIncludeArtist = Boolean(artist) && !sameArtist;
+    const nowDescription = shouldIncludeArtist ? summary : (title || summary);
+    message += `Now playing, ${nowDescription}`;
     if (announceTimer) {
       clearTimeout(announceTimer);
       announceTimer = null;
@@ -461,6 +482,8 @@
       speech.speak(message, { interrupt: true });
       lastAnnouncedSummary = summary;
       lastAnnouncedTrackKey = key;
+      lastAnnouncedArtist = artist ?? null;
+      lastAnnouncedTitle = title ?? null;
       announceTimer = null;
     };
     if (ANNOUNCE_DEBOUNCE_MS > 0) {
@@ -502,6 +525,8 @@
     } else if (audio && !audio.paused && current >= 0 && tracks[current]) {
       // Allow a fresh announcement when the toggle is re-enabled mid-track.
       lastAnnouncedTrackKey = null;
+      lastAnnouncedArtist = null;
+      lastAnnouncedTitle = null;
       recordPendingAnnouncement(tracks[current]);
       maybeAnnounceCurrentTrack();
     }
@@ -624,6 +649,8 @@
     pendingAnnouncement = null;
     lastAnnouncedSummary = null;
     lastAnnouncedTrackKey = null;
+    lastAnnouncedArtist = null;
+    lastAnnouncedTitle = null;
     if (announceTimer) {
       clearTimeout(announceTimer);
       announceTimer = null;
@@ -970,7 +997,9 @@
   audio.addEventListener('loadedmetadata', () => {
     tTot.textContent = fmtTime(audio.duration);
   });
-  audio.addEventListener('play', maybeAnnounceCurrentTrack);
+  audio.addEventListener('play', () => {
+    maybeAnnounceCurrentTrack();
+  });
   audio.addEventListener('timeupdate', () => {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
     const pos = Math.round((audio.currentTime / audio.duration) * 1000);
