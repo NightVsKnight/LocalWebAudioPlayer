@@ -25,6 +25,9 @@
   }
   h1 { margin: 0; font-size: 18px; letter-spacing: .3px; font-weight: 600; }
   .hint { color: var(--muted); font-size: 12px; }
+  .folder-path {
+    margin-top: 4px; font-size: 12px; color: var(--accent); overflow-wrap: anywhere;
+  }
   .choose { appearance: none; border: 1px solid var(--border); background: #101427; color: var(--text);
     padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; letter-spacing: .3px;
   }
@@ -84,6 +87,7 @@
       <div>
         <h1>Local MP3 Folder Player</h1>
         <div class="hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</div>
+        <div class="folder-path" id="folderPath" aria-live="polite">No folder selected.</div>
       </div>
       <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
     </header>
@@ -137,6 +141,74 @@
   const seek        = document.getElementById('seek');
   const tCur        = document.getElementById('tCur');
   const tTot        = document.getElementById('tTot');
+  const folderPathEl= document.getElementById('folderPath');
+
+  /** Persistence */
+  const DB_NAME = 'lwa-player';
+  const STORE_NAME = 'handles';
+  const LAST_KEY = 'last-folder';
+  let handleDbPromise = null;
+
+  const getHandleDb = () => {
+    if (!('indexedDB' in window)) return null;
+    if (!handleDbPromise) {
+      handleDbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onerror = () => reject(req.error);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+        };
+        req.onsuccess = () => resolve(req.result);
+      }).catch(err => {
+        console.error('Failed opening handle DB', err);
+        handleDbPromise = null;
+        return null;
+      });
+    }
+    return handleDbPromise;
+  };
+
+  const saveLastHandle = async (handle) => {
+    try {
+      const db = await getHandleDb();
+      if (!db) return;
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(handle, LAST_KEY);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (err) {
+      console.error('Failed storing folder handle', err);
+    }
+  };
+
+  const loadLastHandle = async () => {
+    try {
+      const db = await getHandleDb();
+      if (!db) return null;
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(LAST_KEY);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (err) {
+      console.error('Failed loading folder handle', err);
+      return null;
+    }
+  };
+
+  const setFolderPath = (handle, { loading = false } = {}) => {
+    if (!folderPathEl) return;
+    if (!handle) {
+      folderPathEl.textContent = 'No folder selected.';
+      return;
+    }
+    const name = handle.name || 'Unknown folder';
+    folderPathEl.textContent = loading ? `Folder: ${name} (loading...)` : `Folder: ${name}`;
+  };
 
   /** Playlist state */
   let tracks = [];           // {name, handle, url, duration}
@@ -166,6 +238,7 @@
   }
 
   async function scanFolder(dirHandle) {
+    setFolderPath(dirHandle, { loading: true });
     tracks = [];
     current = -1;
     revokeAll();
@@ -173,10 +246,15 @@
     nowTitleEl.textContent = '—';
     countEl.textContent = 'Scanning…';
 
-    for await (const fh of walk(dirHandle)) {
-      const file = await fh.getFile();
-      const url = URL.createObjectURL(file);
-      tracks.push({ name: file.name, handle: fh, url, duration: NaN });
+    try {
+      for await (const fh of walk(dirHandle)) {
+        const file = await fh.getFile();
+        const url = URL.createObjectURL(file);
+        tracks.push({ name: file.name, handle: fh, url, duration: NaN });
+      }
+    } catch (err) {
+      console.error('Failed scanning folder', err);
+      tracks = [];
     }
 
     // Natural sort by path/name (FileSystemHandle has name only; as a proxy, sort by name)
@@ -185,6 +263,7 @@
     renderList();
     countEl.textContent = `${tracks.length} track${tracks.length===1?'':'s'}`;
     if (tracks.length) { playIndex(0, {autoplay:false}); }
+    setFolderPath(dirHandle);
   }
 
   function renderList() {
@@ -290,8 +369,10 @@
     try {
       const dir = await window.showDirectoryPicker({ id: 'mp3-player-root' });
       const perm = await dir.requestPermission({ mode: 'read' });
-      if (perm === 'granted') await scanFolder(dir);
-      else alert('Read permission was not granted.');
+      if (perm === 'granted') {
+        await scanFolder(dir);
+        await saveLastHandle(dir);
+      } else { alert('Read permission was not granted.'); }
     } catch (e) {
       if (e?.name !== 'AbortError') console.error(e);
     }
@@ -363,6 +444,21 @@
 
   // Clean up object URLs when leaving
   window.addEventListener('beforeunload', revokeAll);
+
+  // Restore previous folder if permission remains granted
+  (async () => {
+    const last = await loadLastHandle();
+    if (!last) return;
+    try {
+      const perm = await last.queryPermission({ mode: 'read' });
+      if (perm === 'granted') {
+        await scanFolder(last);
+      }
+    } catch (err) {
+      console.error('Unable to restore previous folder', err);
+      setFolderPath(null);
+    }
+  })();
 })();
 </script>
 </body>
