@@ -32,3 +32,4 @@ No build tooling is configured; the app is static HTML. If you introduce tooling
 ## Agent Tips
 - Respect the File System Access API limitations; absolute paths are unavailable, so expose handle names only.
 - When persisting data, prefer IndexedDB for structured storage and note permission requirements in code comments.
+- When you finish a coding task, include in your response a recommended commit message (max 72 characters) and nicely formatted description.

@@ -310,7 +310,7 @@
   const speech = createSpeechSynth();
   let announceEnabled = speech.supported;
   let pendingAnnouncement = null;
-  let lastAnnouncedTitle = null;
+  let lastAnnouncedSummary = null;
   let lastAnnouncedTrackKey = null;
 
   /** Utilities */
@@ -319,21 +319,62 @@
     const m = Math.floor(s / 60), ss = Math.floor(s % 60);
     return `${m}:${ss.toString().padStart(2,'0')}`;
   };
-  // Converts filenames such as "01 Artist - Title" into a speech-friendly "Title, by Artist".
-  const formatAnnouncementTitle = (name) => {
-    if (!name) return 'Unknown track';
-    const cleaned = name.replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (!cleaned) return 'Unknown track';
-    const normalized = cleaned.replace(/[–—]/g, '-');
-    const parts = normalized.split(' - ');
-    if (parts.length >= 2) {
-      const artistRaw = parts[0].replace(/^\d+\s*/, '').trim().replace(/\s+/g, ' ');
-      const titleRaw = parts.slice(1).join(' - ').trim().replace(/\s+/g, ' ');
-      if (artistRaw && titleRaw) {
-        return `${titleRaw}, by ${artistRaw}`;
-      }
+  const normalizeSpaces = (value) => {
+    if (!value) return '';
+    return value.replace(/\s+/g, ' ').trim();
+  };
+  const stripTrailingTags = (value) => value.replace(/\s*[\[\(][^)\]]*[\)\]]\s*$/g, '').trim();
+  const resolveFolderKey = (track) => normalizeSpaces(track.path[0] || rootDirName || '').toLowerCase();
+
+  const ANNOUNCE_RULES = [
+    {
+      matches: (track) => resolveFolderKey(track) === 'utho riley',
+      format: (name) => {
+        const base = stripTrailingTags(name).split(' - ')[0] || name;
+        const title = normalizeSpaces(base.replace(/｜.*$/u, ''));
+        return { title, artist: 'Utho Riley' };
+      },
+    },
+    {
+      matches: (track) => resolveFolderKey(track) === 'white bat audio',
+      format: (name) => {
+        let working = stripTrailingTags(name);
+        const parts = working.split(' - ');
+        let title = parts[1] ? parts[1] : working;
+        title = title.replace(/\s*(⧸⧸|\/\/).*$/u, '');
+        return { title: normalizeSpaces(title), artist: 'White Bat Audio' };
+      },
+    },
+  ];
+
+  const buildAnnouncementDetails = (track) => {
+    const fallbackArtistRaw = (track.path[0] || rootDirName || '').replace(/[_]+/g, ' ');
+    const fallbackArtist = normalizeSpaces(fallbackArtistRaw) || 'Unknown artist';
+    const baseName = normalizeSpaces(track.displayName.replace(/[_]+/g, ' '));
+    const sanitized = stripTrailingTags(baseName);
+
+    const rule = ANNOUNCE_RULES.find(rule => rule.matches(track));
+    if (rule) {
+      const result = rule.format(sanitized) || {};
+      const titleRaw = result.title || sanitized;
+      const artistRaw = result.artist || fallbackArtist;
+      const title = normalizeSpaces(titleRaw) || 'Unknown track';
+      const artist = normalizeSpaces(artistRaw);
+      const summary = artist ? `${title}, by ${artist}` : title;
+      return { title, artist, summary };
     }
-    return cleaned;
+
+    const fallbackName = sanitized.replace(/\s*(⧸⧸|\/\/|｜).*$/u, '').trim() || sanitized;
+    const normalized = fallbackName.replace(/[–—]/g, '-');
+    const parts = normalized.split(' - ');
+    let title = parts.length >= 2 ? normalizeSpaces(parts.slice(1).join(' - ')) : fallbackName;
+    if (!title) title = fallbackName;
+    let artist = parts.length >= 2 ? normalizeSpaces(parts[0].replace(/^\d+\s*/, '')) : fallbackArtist;
+    if (!artist) artist = fallbackArtist;
+    title = normalizeSpaces(title) || 'Unknown track';
+    artist = normalizeSpaces(artist);
+    const summary = artist ? `${title}, by ${artist}` : title;
+    return { title, artist, summary };
   };
 
   const recordPendingAnnouncement = (track) => {
@@ -341,17 +382,18 @@
       pendingAnnouncement = null;
       return;
     }
+    const details = buildAnnouncementDetails(track);
     pendingAnnouncement = {
       key: trackKey(track),
-      title: formatAnnouncementTitle(track.displayName),
+      summary: details.summary,
     };
   };
 
   const maybeAnnounceCurrentTrack = () => {
     if (!pendingAnnouncement) return;
-    const { key, title } = pendingAnnouncement;
+    const { key, summary } = pendingAnnouncement;
     pendingAnnouncement = null;
-    if (!title) return;
+    if (!summary) return;
 
     // Announcements are disabled by the user.
     if (!announceEnabled) return;
@@ -361,12 +403,12 @@
     if (key === lastAnnouncedTrackKey) return;
 
     let message = '';
-    if (lastAnnouncedTitle && lastAnnouncedTitle !== title) {
-      message = `That was ${lastAnnouncedTitle}. `;
+    if (lastAnnouncedSummary && lastAnnouncedSummary !== summary) {
+      message = `That was: ${lastAnnouncedSummary}. `;
     }
-    message += `Now playing: ${title}`;
+    message += `Now playing: ${summary}`;
     speech.speak(message, { interrupt: true });
-    lastAnnouncedTitle = title;
+    lastAnnouncedSummary = summary;
     lastAnnouncedTrackKey = key;
   };
 
@@ -507,7 +549,7 @@
     tracks = [];
     current = -1;
     pendingAnnouncement = null;
-    lastAnnouncedTitle = null;
+    lastAnnouncedSummary = null;
     lastAnnouncedTrackKey = null;
     revokeAll();
     listEl.innerHTML = '';
