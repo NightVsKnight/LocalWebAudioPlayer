@@ -73,7 +73,7 @@
   }
   @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
   .player {
-    padding: 18px; display: grid; grid-template-rows: auto auto 1fr; gap: 14px; border-right: 1px solid var(--border);
+    padding: 18px; display: grid; grid-template-rows: auto auto auto auto; gap: 14px; border-right: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(13, 20, 48, 0.46), transparent);
   }
   @media (max-width: 900px) { .player { border-right: none; border-bottom: 1px solid var(--border); } }
@@ -117,6 +117,32 @@
     background: linear-gradient(90deg, rgba(93, 251, 255, 0.45), rgba(155, 132, 255, 0.35));
     border-radius: 999px; height: 4px;
   }
+  .visualizer {
+    background: rgba(11, 18, 46, 0.78); border: 1px solid var(--border); border-radius: 14px; padding: 12px;
+    display: grid; gap: 10px; box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
+  }
+  .viz-toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px;
+  }
+  .viz-title { font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: var(--muted); }
+  .viz-select {
+    appearance: none; border: 1px solid var(--border); background: #101427; color: var(--text);
+    padding: 6px 30px 6px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; letter-spacing: .2px;
+    box-shadow: 0 0 18px rgba(93, 251, 255, 0.12); min-width: 160px;
+    background-image: linear-gradient(135deg, rgba(93, 251, 255, 0.18), rgba(155, 132, 255, 0.12));
+  }
+  .viz-select:hover { border-color: rgba(93, 251, 255, 0.4); box-shadow: 0 0 22px rgba(93, 251, 255, 0.24); }
+  .viz-select:focus {
+    outline: 2px solid color-mix(in oklab, var(--accent) 65%, transparent);
+    box-shadow: 0 0 22px rgba(93, 251, 255, 0.32);
+  }
+  .viz-select:disabled { opacity: .6; cursor: not-allowed; }
+  .viz-canvas {
+    width: 100%; height: 180px; border-radius: 10px; display: block;
+    background: linear-gradient(180deg, rgba(4, 7, 18, 0.78), rgba(8, 14, 36, 0.82));
+    box-shadow: inset 0 0 22px rgba(93, 251, 255, 0.12);
+  }
+  .viz-status { font-size: 12px; color: var(--muted); }
   .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
   .list {
     padding: 12px; overflow: auto; max-height: 560px;
@@ -203,6 +229,19 @@
           <input id="seek" type="range" min="0" max="1000" value="0" />
           <div class="time"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
         </div>
+
+        <div class="visualizer" role="region" aria-label="Audio visualizer">
+          <div class="viz-toolbar">
+            <span class="viz-title" id="vizTitle">Spectrum Analyzer</span>
+            <select id="vizMode" class="viz-select" aria-labelledby="vizTitle">
+              <option value="bars">Neon Bars</option>
+              <option value="wave">Glow Wave</option>
+              <option value="radial">Pulse Halo</option>
+            </select>
+          </div>
+          <canvas id="vizCanvas" class="viz-canvas" role="img" aria-label="Audio visualization"></canvas>
+          <div class="viz-status" id="vizStatus">Select a style and start playback to visualize audio.</div>
+        </div>
       </section>
 
       <aside class="list" id="list" aria-label="Playlist"></aside>
@@ -236,6 +275,9 @@
   const tCur        = document.getElementById('tCur');
   const tTot        = document.getElementById('tTot');
   const folderPathEl= document.getElementById('folderPath');
+  const vizModeSel  = document.getElementById('vizMode');
+  const vizCanvas   = document.getElementById('vizCanvas');
+  const vizStatusEl = document.getElementById('vizStatus');
 
   /** Persistence */
   const DB_NAME = 'lwa-player';
@@ -245,6 +287,7 @@
   const LOOP_KEY = 'loop-mode';
   const LAST_TRACK_KEY = 'last-track';
   const ANNOUNCE_KEY = 'lwa-announce-enabled';
+  const VIZ_MODE_KEY = 'lwa-viz-mode';
   let handleDbPromise = null;
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -355,6 +398,259 @@
   // 250ms prevents announcement spam during rapid track skipping,
   // and provides time for the audio to stabilize before speaking.
   const ANNOUNCE_DEBOUNCE_MS = 250;
+
+  /** Visualizer */
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext || null;
+  const VIZ_FFT_SIZE = 2048;
+  const VIZ_BAR_COUNT = 64;
+  const VIZ_LABELS = {
+    bars: 'Neon Bars',
+    wave: 'Glow Wave',
+    radial: 'Pulse Halo',
+  };
+  const DEFAULT_VIZ_MODE = 'bars';
+  let vizMode = DEFAULT_VIZ_MODE;
+  let vizAudioCtx = null;
+  let vizAnalyser = null;
+  let vizSourceNode = null;
+  let vizFreqData = null;
+  let vizTimeData = null;
+  let vizFrame = null;
+  const vizCtx = vizCanvas ? vizCanvas.getContext('2d') : null;
+
+  const updateVizStatus = (state = 'idle') => {
+    if (!vizStatusEl) return;
+    if (!AudioContextCtor || !vizCanvas || !vizCtx) {
+      vizStatusEl.textContent = 'Visualizer not supported in this browser.';
+      return;
+    }
+    const label = VIZ_LABELS[vizMode] || VIZ_LABELS[DEFAULT_VIZ_MODE];
+    if (state === 'playing') {
+      vizStatusEl.textContent = `${label} visualization running.`;
+    } else if (state === 'paused') {
+      vizStatusEl.textContent = `${label} visualization paused.`;
+    } else {
+      vizStatusEl.textContent = `Style: ${label}. Start playback to visualize audio.`;
+    }
+  };
+
+  const readVizModePreference = () => {
+    try {
+      const stored = localStorage.getItem(VIZ_MODE_KEY);
+      if (stored && VIZ_LABELS[stored]) return stored;
+    } catch (err) {
+      console.warn('Unable to read visualizer preference', err);
+    }
+    return DEFAULT_VIZ_MODE;
+  };
+
+  const persistVizModePreference = (value) => {
+    try {
+      localStorage.setItem(VIZ_MODE_KEY, value);
+    } catch (err) {
+      console.warn('Unable to store visualizer preference', err);
+    }
+  };
+
+  const setVizMode = (value, { persist = false } = {}) => {
+    const next = VIZ_LABELS[value] ? value : DEFAULT_VIZ_MODE;
+    vizMode = next;
+    if (vizModeSel && vizModeSel.value !== next) {
+      vizModeSel.value = next;
+    }
+    if (persist) persistVizModePreference(next);
+    updateVizStatus(audio && !audio.paused && !audio.ended ? 'playing' : 'idle');
+  };
+
+  const syncCanvasDimensions = () => {
+    if (!vizCanvas || !vizCtx) return { width: 0, height: 0 };
+    const rect = vizCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.floor(rect.width * dpr));
+    const height = Math.max(1, Math.floor(rect.height * dpr));
+    if (vizCanvas.width !== width || vizCanvas.height !== height) {
+      vizCanvas.width = width;
+      vizCanvas.height = height;
+      vizCtx.setTransform(1, 0, 0, 1, 0, 0);
+      vizCtx.scale(dpr, dpr);
+    }
+    return { width: rect.width, height: rect.height };
+  };
+
+  const ensureVisualizerNodes = () => {
+    if (!AudioContextCtor || !vizCanvas || !vizCtx) return false;
+    if (!vizAudioCtx) {
+      try {
+        vizAudioCtx = new AudioContextCtor();
+      } catch (err) {
+        console.error('Unable to create AudioContext', err);
+        return false;
+      }
+    }
+    if (!vizAnalyser) {
+      vizAnalyser = vizAudioCtx.createAnalyser();
+      vizAnalyser.fftSize = VIZ_FFT_SIZE;
+      vizAnalyser.smoothingTimeConstant = 0.82;
+      vizAnalyser.minDecibels = -90;
+      vizAnalyser.maxDecibels = -10;
+    }
+    if (!vizSourceNode) {
+      vizSourceNode = vizAudioCtx.createMediaElementSource(audio);
+      vizSourceNode.connect(vizAnalyser);
+      vizAnalyser.connect(vizAudioCtx.destination);
+    }
+    if (vizAudioCtx.state === 'suspended') {
+      vizAudioCtx.resume().catch(err => {
+        console.warn('Unable to resume AudioContext', err);
+      });
+    }
+    if (!vizFreqData || vizFreqData.length !== vizAnalyser.frequencyBinCount) {
+      vizFreqData = new Uint8Array(vizAnalyser.frequencyBinCount);
+    }
+    if (!vizTimeData || vizTimeData.length !== vizAnalyser.fftSize) {
+      vizTimeData = new Uint8Array(vizAnalyser.fftSize);
+    }
+    return true;
+  };
+
+  const drawBars = (width, height) => {
+    if (!vizAnalyser) return;
+    vizAnalyser.getByteFrequencyData(vizFreqData);
+    vizCtx.fillStyle = 'rgba(4, 7, 18, 0.78)';
+    vizCtx.fillRect(0, 0, width, height);
+    const barCount = VIZ_BAR_COUNT;
+    const step = Math.max(1, Math.floor(vizFreqData.length / barCount));
+    const barWidth = width / barCount;
+    for (let i = 0; i < barCount; i++) {
+      const magnitude = vizFreqData[i * step] / 255;
+      const eased = Math.pow(magnitude, 1.6);
+      const barHeight = Math.max(4, eased * height);
+      const x = i * barWidth;
+      const gradient = vizCtx.createLinearGradient(x, height - barHeight, x, height);
+      gradient.addColorStop(0, 'rgba(149, 132, 255, 0.92)');
+      gradient.addColorStop(1, 'rgba(93, 251, 255, 0.92)');
+      vizCtx.fillStyle = gradient;
+      vizCtx.fillRect(x + 1, height - barHeight, Math.max(1.5, barWidth - 2), barHeight);
+    }
+  };
+
+  const drawWave = (width, height) => {
+    if (!vizAnalyser) return;
+    vizAnalyser.getByteTimeDomainData(vizTimeData);
+    vizCtx.fillStyle = 'rgba(4, 7, 18, 0.78)';
+    vizCtx.fillRect(0, 0, width, height);
+    const gradient = vizCtx.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, 'rgba(93, 251, 255, 0.85)');
+    gradient.addColorStop(1, 'rgba(155, 132, 255, 0.85)');
+    vizCtx.lineWidth = 2;
+    vizCtx.strokeStyle = gradient;
+    vizCtx.shadowColor = 'rgba(93, 251, 255, 0.35)';
+    vizCtx.shadowBlur = 12;
+    vizCtx.beginPath();
+    const slice = width / vizTimeData.length;
+    for (let i = 0; i < vizTimeData.length; i++) {
+      const value = (vizTimeData[i] - 128) / 128;
+      const y = height / 2 + value * (height / 2 - 6);
+      const x = i * slice;
+      if (i === 0) vizCtx.moveTo(x, y);
+      else vizCtx.lineTo(x, y);
+    }
+    vizCtx.stroke();
+    vizCtx.shadowBlur = 0;
+    vizCtx.beginPath();
+    vizCtx.fillStyle = 'rgba(93, 251, 255, 0.08)';
+    vizCtx.fillRect(0, height / 2, width, 1);
+  };
+
+  const drawRadial = (width, height) => {
+    if (!vizAnalyser) return;
+    const RADIAL_POINT_COUNT = 90;
+    vizAnalyser.getByteFrequencyData(vizFreqData);
+    vizCtx.fillStyle = 'rgba(4, 7, 18, 0.78)';
+    vizCtx.fillRect(0, 0, width, height);
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const baseRadius = Math.min(width, height) * 0.22;
+    const maxRadius = Math.min(width, height) * 0.48;
+    const count = RADIAL_POINT_COUNT;
+    const step = Math.max(1, Math.floor(vizFreqData.length / count));
+    vizCtx.save();
+    vizCtx.translate(centerX, centerY);
+    vizCtx.lineWidth = 2;
+    for (let i = 0; i < count; i++) {
+      const value = vizFreqData[i * step] / 255;
+      const magnitude = baseRadius + (maxRadius - baseRadius) * Math.pow(value, 1.45);
+      const angle = (i / count) * Math.PI * 2;
+      const x = Math.cos(angle) * magnitude;
+      const y = Math.sin(angle) * magnitude;
+      vizCtx.beginPath();
+      vizCtx.strokeStyle = `rgba(93, 251, 255, ${0.12 + value * 0.75})`;
+      vizCtx.moveTo(Math.cos(angle) * baseRadius, Math.sin(angle) * baseRadius);
+      vizCtx.lineTo(x, y);
+      vizCtx.stroke();
+    }
+    const pulse = vizCtx.createRadialGradient(0, 0, baseRadius * 0.2, 0, 0, baseRadius);
+    pulse.addColorStop(0, 'rgba(93, 251, 255, 0.28)');
+    pulse.addColorStop(1, 'rgba(149, 132, 255, 0.05)');
+    vizCtx.beginPath();
+    vizCtx.fillStyle = pulse;
+    vizCtx.arc(0, 0, baseRadius, 0, Math.PI * 2);
+    vizCtx.fill();
+    vizCtx.restore();
+  };
+
+  const VIZ_DRAWERS = {
+    bars: drawBars,
+    wave: drawWave,
+    radial: drawRadial,
+  };
+
+  const renderVisualizer = () => {
+    if (!vizCtx || !vizAnalyser) return;
+    const { width, height } = syncCanvasDimensions();
+    if (!width || !height) {
+      vizFrame = requestAnimationFrame(renderVisualizer);
+      return;
+    }
+    const draw = VIZ_DRAWERS[vizMode] || VIZ_DRAWERS[DEFAULT_VIZ_MODE];
+    draw(width, height);
+    vizFrame = requestAnimationFrame(renderVisualizer);
+  };
+
+  const startVisualizer = () => {
+    if (!ensureVisualizerNodes()) return;
+    if (!vizFrame) {
+      vizFrame = requestAnimationFrame(renderVisualizer);
+    }
+    updateVizStatus('playing');
+  };
+
+  const stopVisualizer = ({ clear = false, state = 'paused' } = {}) => {
+    if (vizFrame) {
+      cancelAnimationFrame(vizFrame);
+      vizFrame = null;
+    }
+    if (clear && vizCtx) {
+      const { width, height } = syncCanvasDimensions();
+      if (width && height) {
+        vizCtx.clearRect(0, 0, width, height);
+      }
+    }
+    updateVizStatus(state);
+  };
+
+  if (vizModeSel) {
+    setVizMode(readVizModePreference());
+    vizModeSel.addEventListener('change', () => setVizMode(vizModeSel.value, { persist: true }));
+    if (!AudioContextCtor || !vizCanvas || !vizCtx) {
+      vizModeSel.disabled = true;
+      vizModeSel.title = 'Audio visualizer is not available in this browser.';
+    }
+  } else {
+    setVizMode(readVizModePreference());
+  }
+
+  updateVizStatus();
 
   /** Utilities */
   const fmtTime = s => {
@@ -651,6 +947,7 @@
     lastAnnouncedTrackKey = null;
     lastAnnouncedArtist = null;
     lastAnnouncedTitle = null;
+    stopVisualizer({ clear: true, state: 'idle' });
     if (announceTimer) {
       clearTimeout(announceTimer);
       announceTimer = null;
@@ -999,6 +1296,10 @@
   });
   audio.addEventListener('play', () => {
     maybeAnnounceCurrentTrack();
+    startVisualizer();
+  });
+  audio.addEventListener('pause', () => {
+    stopVisualizer({ state: 'paused' });
   });
   audio.addEventListener('timeupdate', () => {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -1014,6 +1315,7 @@
 
   // Track end behavior
   audio.addEventListener('ended', () => {
+    stopVisualizer({ clear: true, state: 'idle' });
     // If loop one is set, audio.loop handles it.
     if (loopMode === 'one') return;
     // Loop all or off:
