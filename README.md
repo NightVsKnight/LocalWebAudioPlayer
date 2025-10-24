@@ -11,6 +11,7 @@ I created this because:
 ## Features
 - Remembers shuffle and loop preferences between sessions (defaults: Shuffle On, Loop All).
 - Restores the last played track when available, otherwise falls back to the first track.
+- Offers optional voice announcements for track transitions with customizable voice selection.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
