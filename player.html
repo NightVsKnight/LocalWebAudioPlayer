@@ -69,14 +69,31 @@
   }
   .choose:hover { border-color: rgba(93, 251, 255, 0.45); box-shadow: 0 0 24px rgba(93, 251, 255, 0.28); transform: translateY(-1px); }
   .wrap {
-    display: grid; grid-template-columns: 1.1fr .9fr; gap: 0; min-height: 460px;
+    /* Left: main player (will have an internal 4-col grid), Right: playlist */
+    display: grid; grid-template-columns: 1fr 320px; gap: 0; min-height: 520px;
   }
+  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr 260px; } }
   @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+
   .player {
-    padding: 18px; display: grid; grid-template-rows: auto auto auto auto; gap: 14px; border-right: 1px solid var(--border);
+    padding-top: 18px;
+    padding-left: 18px;
+    padding-bottom: 18px;
+    padding-right: 0px;
+    display: grid;
+    /* internal player grid: 3 main columns + 1 auto column for the volume panel
+      Use `auto` so the volume column only becomes as wide as its contents. */
+    grid-template-columns: 1fr 1fr 1fr auto;
+    grid-auto-rows: auto; gap: 14px; 
     background: linear-gradient(180deg, rgba(13, 20, 48, 0.46), transparent);
   }
+  @media (max-width: 900px) { .player { grid-template-columns: 1fr; } }
   @media (max-width: 900px) { .player { border-right: none; border-bottom: 1px solid var(--border); } }
+    @media (max-width: 900px) {
+    /* stack volume and visualizer in single-column layout */
+    .volume-panel { grid-column: 1 / -1; grid-row: auto; border-left: none; border-top: 1px solid var(--border); padding-top: 12px; }
+    .visualizer { grid-column: 1 / -1; grid-row: auto; }
+  }
 
   /* Now area: simple 2x2 grid */
   .now {
@@ -126,7 +143,7 @@
   }
 
   .controls {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--ctrl-min), 1fr)); gap: 10px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
   }
   button.ctrl {
     border: 1px solid var(--border); background: rgba(12, 19, 44, 0.82); color: var(--text);
@@ -148,7 +165,63 @@
   .visualizer {
     background: rgba(11, 18, 46, 0.78); border: 1px solid var(--border); border-radius: 14px; padding: 12px;
     display: grid; gap: 10px; box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
+    /* span all internal player columns so it covers prev/play/next/volume area */
+    grid-column: 1 / 5;
   }
+
+  /* Volume panel when moved inside player as column 4 */
+  .volume-panel {
+    /* occupy the 4th internal column */
+    grid-column: 4 / 5; align-self: stretch; justify-self: center;
+    /* span the first 4 rows (top-controls, now, controls, seek) */
+    grid-row: 1 / 5;
+    /* stack label / track / percent vertically and center them */
+    display: grid; grid-template-rows: auto 1fr auto; align-items: center; justify-items: center;
+
+    padding: 12px;
+    background: rgba(11, 18, 46, 0.78); border: 1px solid var(--border); border-radius: 14px;
+    display: grid; box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
+  }
+  /* volume inner container used for the label and track */
+  .volume-panel .volume-label { text-align: center; }
+  .volume-panel .volume-label .hint { font-size: 14px; font-weight: 600; color: var(--text); }
+  .volume-panel .volume-track {
+    /* let track size to its contents (the vertical input) so column remains narrow */
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    box-sizing: border-box;
+    overflow: visible;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+  .volume-vertical { display:flex; flex-direction: column; align-items:center; }
+  /* vertical volume slider styling - use native vertical writing-mode for modern browsers */
+  #volume.vertical {
+    /* Use native vertical layout instead of rotating the control. This is supported in
+       modern Chromium and produces a cleaner bounding box without overlap. */
+    writing-mode: vertical-lr;
+    direction: rtl;
+    /* horizontal thickness and vertical length */
+    width: 22px;
+    height: 200px;
+    display: block;
+    margin: 0;
+    box-sizing: border-box;
+  }
+  .volume-value {
+    font-size: 15px; font-weight: 600; color: var(--text); margin-top: 0;
+  }
+
+   /* place the main player sections into the left 3 columns; volume-panel occupies column 4 */
+  .top-controls { grid-column: 1 / 4; }
+  .now { grid-column: 1 / 4; }
+  .controls { grid-column: 1 / 4; }
+  .seek { grid-column: 1 / 4; }
+  .top-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
   .viz-toolbar {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px;
   }
@@ -171,9 +244,11 @@
     box-shadow: inset 0 0 22px rgba(93, 251, 255, 0.12);
   }
   .viz-status { font-size: 12px; color: var(--muted); }
+  
   .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
+
   .list {
-    padding: 12px; overflow: auto; max-height: 560px;
+    padding: 12px; overflow: auto; height: 610px;
     background: linear-gradient(180deg, rgba(8, 14, 36, 0.55), rgba(8, 14, 36, 0.2));
   }
   .item {
@@ -236,6 +311,12 @@
 
     <div class="wrap">
       <section class="player">
+        <div class="top-controls" role="group" aria-label="Top controls">
+          <button class="ctrl" id="shuffleBtn" aria-pressed="true" title="Toggle Shuffle (S)">🔀 Shuffle</button>
+          <button class="ctrl" id="loopBtn" title="Cycle Loop (L)">🔁 Loop: All</button>
+          <button class="ctrl" id="announceBtn" aria-pressed="true" title="Toggle Speech Announcements (A)">🗣 Announce On</button>
+        </div>
+
         <div class="now" role="group" aria-labelledby="nowLabel">
           <small id="nowLabel" class="now-label">Now Playing:</small>
           <span id="nowArtist" class="now-artist">—</span>
@@ -248,14 +329,17 @@
           <button class="ctrl" id="prevBtn" title="Previous (←)">⏮ Prev</button>
           <button class="ctrl" id="playPauseBtn" title="Space">▶️ Play</button>
           <button class="ctrl" id="nextBtn" title="Next (→)">⏭ Next</button>
-          <button class="ctrl" id="shuffleBtn" aria-pressed="true" title="Toggle Shuffle (S)">🔀 Shuffle</button>
-          <button class="ctrl" id="loopBtn" title="Cycle Loop (L)">🔁 Loop: All</button>
-          <button class="ctrl" id="announceBtn" aria-pressed="true" title="Toggle Speech Announcements (A)">🗣 Announce On</button>
         </div>
 
         <div class="seek">
           <input id="seek" type="range" min="0" max="1000" value="0" />
           <div class="time"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+        </div>
+
+        <div class="volume-panel" aria-label="Volume panel">
+          <div class="volume-label"><label for="volume" class="hint">Volume</label></div>
+          <div class="volume-track"><input id="volume" class="vertical" type="range" min="0" max="100" value="100" title="Volume (↑/↓)" /></div>
+          <div class="volume-value" id="volumeDisplay">100%</div>
         </div>
 
         <div class="visualizer" role="region" aria-label="Audio visualizer">
@@ -276,7 +360,7 @@
     </div>
 
     <footer>
-      <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Prev/Next · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop · <span class="kbd">A</span> Announce</div>
+      <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Prev/Next · <span class="kbd">↑/↓</span> Volume · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop · <span class="kbd">A</span> Announce</div>
       <div id="count">0 tracks</div>
     </footer>
   </div>
@@ -303,6 +387,8 @@
   const seek        = document.getElementById('seek');
   const tCur        = document.getElementById('tCur');
   const tTot        = document.getElementById('tTot');
+  const volumeSlider= document.getElementById('volume');
+  const volumeDisplay=document.getElementById('volumeDisplay');
   const folderPathEl= document.getElementById('folderPath');
   const vizModeSel  = document.getElementById('vizMode');
   const vizCanvas   = document.getElementById('vizCanvas');
@@ -317,6 +403,7 @@
   const LAST_TRACK_KEY = 'last-track';
   const ANNOUNCE_KEY = 'lwa-announce-enabled';
   const VIZ_MODE_KEY = 'lwa-viz-mode';
+  const VOLUME_KEY = 'lwa-volume';
   let handleDbPromise = null;
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -1196,6 +1283,26 @@
     audio.loop = (loopMode === 'one');
   }
 
+  const VOLUME_STEP = 5;  // 5% volume change per arrow key press
+
+  function setVolume(value, { persist = true } = {}) {
+    const clampedValue = Math.max(0, Math.min(100, Math.round(value)));
+    audio.volume = clampedValue / 100;
+    if (volumeSlider) volumeSlider.value = String(clampedValue);
+    if (volumeDisplay) volumeDisplay.textContent = `${clampedValue}%`;
+    
+    if (persist) {
+      putStoreValue(VOLUME_KEY, clampedValue).catch(err => {
+        console.error('Failed storing volume preference', err);
+      });
+    }
+  }
+
+  function adjustVolume(delta) {
+    const currentVolume = Math.round(audio.volume * 100);
+    setVolume(currentVolume + delta);
+  }
+
   async function playIndex(idx, {autoplay=true} = {}) {
     if (!tracks.length) return;
     if (idx < 0) idx = 0;
@@ -1270,6 +1377,18 @@
       console.error('Failed loading loop preference', err);
     }
     setLoopLabel();
+
+    try {
+      const storedVolume = await getStoreValue(VOLUME_KEY);
+      if (typeof storedVolume === 'number' && storedVolume >= 0 && storedVolume <= 100) {
+        setVolume(storedVolume, { persist: false });
+      } else {
+        setVolume(100, { persist: false });
+      }
+    } catch (err) {
+      console.error('Failed loading volume preference', err);
+      setVolume(100, { persist: false });
+    }
   };
 
   /** Event wiring */
@@ -1322,6 +1441,13 @@
     });
   });
 
+  // Volume control
+  if (volumeSlider) {
+    volumeSlider.addEventListener('input', () => {
+      setVolume(Number(volumeSlider.value));
+    });
+  }
+
   // Audio timing UI
   audio.addEventListener('loadedmetadata', () => {
     tTot.textContent = fmtTime(audio.duration);
@@ -1362,10 +1488,44 @@
 
   // Keyboard shortcuts
   window.addEventListener('keydown', (e) => {
+    // Skip if typing in input fields or textareas
     if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
-    if (e.code === 'Space') { e.preventDefault(); playPauseBtn.click(); }
-    else if (e.key === 'ArrowRight') nextBtn.click();
-    else if (e.key === 'ArrowLeft') prevBtn.click();
+    
+    // Skip if select element is focused (for visualizer dropdown)
+    if (e.target.tagName === 'SELECT') return;
+    
+    if (e.code === 'Space') { 
+      e.preventDefault(); 
+      playPauseBtn.click(); 
+    }
+    else if (e.key === 'ArrowRight') {
+      // Only prevent default if not focused on a scrollable playlist
+      const playlist = document.getElementById('playlist');
+      const isPlaylistFocused = playlist && (playlist === e.target || playlist.contains(e.target));
+      const isPlaylistScrollable = playlist && playlist.scrollWidth > playlist.clientWidth;
+      if (!(isPlaylistFocused && isPlaylistScrollable)) {
+        e.preventDefault();
+        nextBtn.click();
+      }
+    }
+    else if (e.key === 'ArrowLeft') {
+      // Only prevent default if not focused on a scrollable playlist
+      const playlist = document.getElementById('playlist');
+      const isPlaylistFocused = playlist && (playlist === e.target || playlist.contains(e.target));
+      const isPlaylistScrollable = playlist && playlist.scrollWidth > playlist.clientWidth;
+      if (!(isPlaylistFocused && isPlaylistScrollable)) {
+        e.preventDefault();
+        prevBtn.click();
+      }
+    }
+    else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      adjustVolume(VOLUME_STEP);
+    }
+    else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      adjustVolume(-VOLUME_STEP);
+    }
     else if (e.key.toLowerCase() === 's') shuffleBtn.click();
     else if (e.key.toLowerCase() === 'l') loopBtn.click();
     else if (e.key.toLowerCase() === 'a' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName) && announceBtn && !announceBtn.disabled) {
