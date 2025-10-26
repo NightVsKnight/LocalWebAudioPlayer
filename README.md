@@ -75,7 +75,7 @@ The spectrum analyzer visualizations use logarithmic frequency mapping to provid
 
 ### Testing the Analyzer
 
-The `media/Tests/Sonic Electronix` folder contains test tones and noise files that can verify the analyzer's accuracy:
+The `testmedia` folder contains test tones and noise files that can verify the analyzer's accuracy:
 
 - **High-Frequency Test Tones**: Files like `16000 Hz Test Tone [K15bC8w5MrA].mp3`, `18000 Hz Test Tone [3tBI-T2SQgQ].mp3`, and `20000 Hz Test Tone [0DyVytR5aO4].mp3` should appear in the high-frequency region (right side) of the spectrum.
 - **White Noise**: `White Noise [IMRj1ombxqY].mp3` should show activity across the entire frequency range when played at full volume, with relatively even distribution on Neon Bars and Pulse Halo modes.
