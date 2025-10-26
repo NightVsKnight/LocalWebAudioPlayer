@@ -67,6 +67,8 @@ yt-dlp -x --audio-format mp3 {URL}
 Examples:
 * My `Utho Riley` playlist: yt-dlp -x --audio-format mp3 PLNtyAG9UO9oeMDT193y8Zno_E8U4MMtIU
 * My `White Bat Audio` playlist: yt-dlp -x --audio-format mp3 PLNtyAG9UO9odGA1KzBuVsern15RexNfjQ
+* `GMODISM` `Test Your Speakers⧸Headphone Sound Test`: yt-dlp -x --audio-format mp3 5Dc-5DD8P-0
+* `Sonic Electronix` `Test Tones` playlist: yt-dlp -x --audio-format mp3 PLzFvCAfIq7a2SIBfDhpCytfJ4RHVb_KLY
 
 ### TODO
 
