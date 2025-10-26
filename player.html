@@ -494,6 +494,9 @@
   let lastAnnouncedTitle = null;
   let announceTimer = null;
 
+  /** Media Session API support */
+  const mediaSessionSupported = 'mediaSession' in navigator;
+
   const applyNowTrackMetrics = () => {
     if (!nowTrackNumberEl) return;
     if (!tracks.length) {
@@ -509,6 +512,100 @@
   };
 
   applyNowTrackMetrics();
+
+  /** Update Media Session metadata */
+  const updateMediaSessionMetadata = (track) => {
+    if (!mediaSessionSupported || !track) return;
+    try {
+      const details = buildAnnouncementDetails(track);
+      const title = details.title || track.displayName || 'Unknown Track';
+      const artist = details.artist || 'Unknown Artist';
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title,
+        artist,
+        album: rootDirName || 'Local Collection',
+      });
+    } catch (err) {
+      console.warn('Failed updating Media Session metadata', err);
+    }
+  };
+
+  /** Set up Media Session action handlers */
+  const setupMediaSessionHandlers = () => {
+    if (!mediaSessionSupported) {
+      console.info('Media Session API not supported in this browser');
+      return;
+    }
+    try {
+      navigator.mediaSession.setActionHandler('play', async () => {
+        if (tracks.length && audio.paused) {
+          try {
+            await audio.play();
+            playPauseBtn.textContent = '⏸ Pause';
+          } catch (e) {
+            console.error('Failed to play via Media Session', e);
+          }
+        }
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (!audio.paused) {
+          audio.pause();
+          playPauseBtn.textContent = '▶️ Play';
+        }
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (tracks.length) playIndex(prevIndex(), { autoplay: true });
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (tracks.length) playIndex(nextIndex(), { autoplay: true });
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audio.currentTime = Math.max(audio.currentTime - skipTime, 0);
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skipTime = details.seekOffset || 10;
+        audio.currentTime = Math.min(audio.currentTime + skipTime, audio.duration);
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.fastSeek && 'fastSeek' in audio) {
+          audio.fastSeek(details.seekTime);
+        } else {
+          audio.currentTime = details.seekTime;
+        }
+      });
+    } catch (err) {
+      console.warn('Failed setting up Media Session handlers', err);
+    }
+  };
+
+  /** Update Media Session playback state */
+  const updateMediaSessionPlaybackState = (state) => {
+    if (!mediaSessionSupported) return;
+    try {
+      navigator.mediaSession.playbackState = state;
+    } catch (err) {
+      console.warn('Failed updating Media Session playback state', err);
+    }
+  };
+
+  /** Update Media Session position state */
+  const updateMediaSessionPositionState = () => {
+    if (!mediaSessionSupported) return;
+    if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: audio.duration,
+        playbackRate: audio.playbackRate,
+        position: audio.currentTime,
+      });
+    } catch (err) {
+      console.warn('Failed updating Media Session position state', err);
+    }
+  };
+
+  // Initialize Media Session handlers
+  setupMediaSessionHandlers();
 
   // Debounce delay for speech announcements.
   // 250ms prevents announcement spam during rapid track skipping,
@@ -1316,6 +1413,7 @@
     if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = fmtTrackNumber(current);
     highlightActive();
+    updateMediaSessionMetadata(tr);
     putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
       console.error('Failed storing last track', err);
     });
@@ -1451,13 +1549,16 @@
   // Audio timing UI
   audio.addEventListener('loadedmetadata', () => {
     tTot.textContent = fmtTime(audio.duration);
+    updateMediaSessionPositionState();
   });
   audio.addEventListener('play', () => {
     maybeAnnounceCurrentTrack();
     startVisualizer();
+    updateMediaSessionPlaybackState('playing');
   });
   audio.addEventListener('pause', () => {
     stopVisualizer({ state: 'paused' });
+    updateMediaSessionPlaybackState('paused');
   });
   audio.addEventListener('timeupdate', () => {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -1469,6 +1570,7 @@
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
     const pos = Number(seek.value) / 1000;
     audio.currentTime = audio.duration * pos;
+    updateMediaSessionPositionState();
   });
 
   // Track end behavior

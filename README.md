@@ -15,6 +15,7 @@ I created this because:
 - Shows the current track number in the Now Playing header for quick reference.
 - Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo). The selector is disabled if the browser lacks AudioContext support.
 - Supports volume control via on-screen slider and Up/Down arrow keys (5% increments). Volume preference is persisted between sessions.
+- Integrates with OS media controls (Bluetooth headsets, keyboard media keys, system tray) via the Media Session API.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
@@ -38,6 +39,22 @@ I created this because:
 - Press Up arrow key to increase volume by 5%; press Down arrow key to decrease volume by 5%.
 - Reload the page and confirm the volume setting is restored.
 - Test that Up/Down arrow keys work when the player has focus, but do not interfere with scrolling behavior in the track list or other elements.
+- Start playback and press keyboard media keys (Play/Pause, Next, Previous) or use Bluetooth headset controls to verify they control playback.
+- Check your OS media overlay (system tray, notification center, lock screen) and confirm it displays current track title and artist information.
+
+## OS Media Controls
+
+The player integrates with your operating system's media controls using the Media Session API, allowing you to:
+
+- **Control playback from anywhere**: Use Bluetooth headset buttons, keyboard media keys, or your OS media tray (Windows taskbar, macOS control center, mobile lock screen) to play, pause, skip tracks, or seek without switching to the browser tab.
+- **View current track info**: The system media overlay displays the currently playing track's title, artist, and album (folder name).
+- **Supported actions**: Play, Pause, Previous Track, Next Track, Seek Forward, Seek Backward, and Seek to Position.
+
+### Browser Compatibility
+
+The Media Session API is supported in modern Chromium-based browsers (Chrome, Edge, Opera) and Firefox. On unsupported browsers, the feature gracefully degrades—the player continues to work normally but without OS-level media control integration.
+
+No special permissions or browser flags are required; the feature works automatically when supported.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
