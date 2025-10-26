@@ -635,6 +635,7 @@
   let vizTimeData = null;
   let vizFrame = null;
   const vizCtx = vizCanvas ? vizCanvas.getContext('2d') : null;
+  let vizFreqBinIndices = null; // Logarithmic frequency bin mapping
 
   const updateVizStatus = (state = 'idle') => {
     if (!vizStatusEl) return;
@@ -695,6 +696,40 @@
     return { width: rect.width, height: rect.height };
   };
 
+  /**
+   * Calculate logarithmic frequency bin indices for balanced spectrum display.
+   * Maps barCount visual bars to frequency bins covering 20Hz-20kHz range.
+   * Returns array of {startBin, endBin} for each bar to average multiple bins.
+   */
+  const calculateLogFreqBins = (sampleRate, fftSize, barCount) => {
+    const minFreq = 20;    // 20 Hz - lowest audible frequency
+    const maxFreq = 20000; // 20 kHz - highest audible frequency
+    const nyquist = sampleRate / 2;
+    const binCount = fftSize / 2;
+    const freqPerBin = nyquist / binCount;
+
+    // Calculate logarithmically spaced frequencies
+    const logMin = Math.log10(minFreq);
+    const logMax = Math.log10(Math.min(maxFreq, nyquist));
+    const logStep = (logMax - logMin) / barCount;
+
+    const bins = [];
+    for (let i = 0; i < barCount; i++) {
+      const freqStart = Math.pow(10, logMin + logStep * i);
+      const freqEnd = Math.pow(10, logMin + logStep * (i + 1));
+      
+      // Convert frequencies to bin indices
+      const startBin = Math.floor(freqStart / freqPerBin);
+      const endBin = Math.ceil(freqEnd / freqPerBin);
+      
+      bins.push({
+        startBin: Math.max(0, Math.min(startBin, binCount - 1)),
+        endBin: Math.max(0, Math.min(endBin, binCount))
+      });
+    }
+    return bins;
+  };
+
   const ensureVisualizerNodes = () => {
     if (!AudioContextCtor || !vizCanvas || !vizCtx) return false;
     if (!vizAudioCtx) {
@@ -708,9 +743,11 @@
     if (!vizAnalyser) {
       vizAnalyser = vizAudioCtx.createAnalyser();
       vizAnalyser.fftSize = VIZ_FFT_SIZE;
-      vizAnalyser.smoothingTimeConstant = 0.82;
-      vizAnalyser.minDecibels = -90;
-      vizAnalyser.maxDecibels = -10;
+      vizAnalyser.smoothingTimeConstant = 0.75;
+      // Adjust dB range: -100 to 0 dBFS for better dynamic range
+      // This allows visualization of both quiet and loud content
+      vizAnalyser.minDecibels = -100;
+      vizAnalyser.maxDecibels = 0;
     }
     if (!vizSourceNode) {
       vizSourceNode = vizAudioCtx.createMediaElementSource(audio);
@@ -728,20 +765,39 @@
     if (!vizTimeData || vizTimeData.length !== vizAnalyser.fftSize) {
       vizTimeData = new Uint8Array(vizAnalyser.fftSize);
     }
+    // Initialize logarithmic frequency bin mapping
+    if (!vizFreqBinIndices) {
+      vizFreqBinIndices = calculateLogFreqBins(vizAudioCtx.sampleRate, VIZ_FFT_SIZE, VIZ_BAR_COUNT);
+    }
     return true;
   };
 
   const drawBars = (width, height) => {
-    if (!vizAnalyser) return;
+    if (!vizAnalyser || !vizFreqBinIndices) return;
     vizAnalyser.getByteFrequencyData(vizFreqData);
     vizCtx.fillStyle = 'rgba(4, 7, 18, 0.78)';
     vizCtx.fillRect(0, 0, width, height);
     const barCount = VIZ_BAR_COUNT;
-    const step = Math.max(1, Math.floor(vizFreqData.length / barCount));
     const barWidth = width / barCount;
+    
     for (let i = 0; i < barCount; i++) {
-      const magnitude = vizFreqData[i * step] / 255;
-      const eased = Math.pow(magnitude, 1.6);
+      const { startBin, endBin } = vizFreqBinIndices[i];
+      
+      // Average the frequency data across the bin range for this bar
+      let sum = 0;
+      let count = 0;
+      for (let bin = startBin; bin < endBin; bin++) {
+        sum += vizFreqData[bin];
+        count++;
+      }
+      const avgMagnitude = count > 0 ? sum / count : 0;
+      
+      // Normalize to 0-1 range
+      const normalized = avgMagnitude / 255;
+      
+      // Apply gentler power curve for more balanced display
+      // Using power of 0.7 instead of 1.6 to boost mid/high frequencies
+      const eased = Math.pow(normalized, 0.7);
       const barHeight = Math.max(4, eased * height);
       const x = i * barWidth;
       const gradient = vizCtx.createLinearGradient(x, height - barHeight, x, height);
@@ -781,7 +837,7 @@
   };
 
   const drawRadial = (width, height) => {
-    if (!vizAnalyser) return;
+    if (!vizAnalyser || !vizFreqBinIndices) return;
     const RADIAL_POINT_COUNT = 90;
     vizAnalyser.getByteFrequencyData(vizFreqData);
     vizCtx.fillStyle = 'rgba(4, 7, 18, 0.78)';
@@ -791,13 +847,28 @@
     const baseRadius = Math.min(width, height) * 0.22;
     const maxRadius = Math.min(width, height) * 0.48;
     const count = RADIAL_POINT_COUNT;
-    const step = Math.max(1, Math.floor(vizFreqData.length / count));
+    
+    // Create a mapping from RADIAL_POINT_COUNT to VIZ_BAR_COUNT
     vizCtx.save();
     vizCtx.translate(centerX, centerY);
     vizCtx.lineWidth = 2;
     for (let i = 0; i < count; i++) {
-      const value = vizFreqData[i * step] / 255;
-      const magnitude = baseRadius + (maxRadius - baseRadius) * Math.pow(value, 1.45);
+      // Map this radial point to a frequency bin index
+      const barIndex = Math.floor((i / count) * VIZ_BAR_COUNT);
+      const { startBin, endBin } = vizFreqBinIndices[Math.min(barIndex, VIZ_BAR_COUNT - 1)];
+      
+      // Average the frequency data across the bin range
+      let sum = 0;
+      let binCount = 0;
+      for (let bin = startBin; bin < endBin; bin++) {
+        sum += vizFreqData[bin];
+        binCount++;
+      }
+      const avgValue = binCount > 0 ? sum / binCount : 0;
+      const value = avgValue / 255;
+      
+      // Apply gentler power curve
+      const magnitude = baseRadius + (maxRadius - baseRadius) * Math.pow(value, 0.7);
       const angle = (i / count) * Math.PI * 2;
       const x = Math.cos(angle) * magnitude;
       const y = Math.sin(angle) * magnitude;
