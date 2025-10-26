@@ -15,6 +15,7 @@
     --border: rgba(108, 154, 255, 0.22);
     --glow: rgba(93, 251, 255, 0.45);
     --ctrl-min: 120px;
+    --playlist-width: clamp(420px, 42%, 600px);
   }
   * { box-sizing: border-box; }
   body {
@@ -48,7 +49,7 @@
     animation: starDrift 60s linear infinite;
   }
   .app {
-    width: min(980px, 100%); background: linear-gradient(150deg, var(--panel), var(--panel-strong));
+    width: min(1120px, 100%); background: linear-gradient(150deg, var(--panel), var(--panel-strong));
     border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 20px 60px rgba(2, 8, 23, 0.65), 0 0 38px rgba(93, 251, 255, 0.15);
     overflow: hidden;
     backdrop-filter: blur(16px);
@@ -70,9 +71,11 @@
   .choose:hover { border-color: rgba(93, 251, 255, 0.45); box-shadow: 0 0 24px rgba(93, 251, 255, 0.28); transform: translateY(-1px); }
   .wrap {
     /* Left: main player (will have an internal 4-col grid), Right: playlist */
-    display: grid; grid-template-columns: 1fr 320px; gap: 0; min-height: 520px;
+    display: grid; grid-template-columns: minmax(0, 1fr) var(--playlist-width); gap: 0; min-height: 520px;
   }
-  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr 260px; } }
+  @media (max-width: 1100px) {
+    :root { --playlist-width: clamp(320px, 45%, 380px); }
+  }
   @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
 
   .player {

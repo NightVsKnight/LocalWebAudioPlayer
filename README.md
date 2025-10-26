@@ -78,6 +78,7 @@ Click **⚙️ Settings** → **Disable** to stop exporting. You can re-enable i
 - Press Up arrow key to increase volume by 5%; press Down arrow key to decrease volume by 5%.
 - Reload the page and confirm the volume setting is restored.
 - Test that Up/Down arrow keys work when the player has focus, but do not interfere with scrolling behavior in the track list or other elements.
+- Resize the window on desktop and confirm the playlist column widens to show longer filenames, then shrink below 900px and ensure the layout collapses into a single column without horizontal scrolling.
 - Start playback and press keyboard media keys (Play/Pause, Next, Previous) or use Bluetooth headset controls to verify they control playback.
 - Check your OS media overlay (system tray, notification center, lock screen) and confirm it displays current track title and artist information.
 - **OBS Export:** Click Settings, configure a text file, load a music folder, start playback, and verify the text file contains "Title – Artist". Skip tracks and confirm the file updates automatically.
