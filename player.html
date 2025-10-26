@@ -270,6 +270,75 @@
     padding: 2px 6px; border-radius: 6px; color: var(--text); box-shadow: 0 0 12px rgba(93, 251, 255, 0.12);
   }
   .hide { display: none !important; }
+  
+  /* Settings modal */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(4, 7, 18, 0.85); backdrop-filter: blur(8px);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: linear-gradient(150deg, var(--panel), var(--panel-strong));
+    border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(2, 8, 23, 0.75), 0 0 38px rgba(93, 251, 255, 0.2);
+    max-width: 520px; width: 100%; max-height: 80vh; overflow-y: auto;
+  }
+  .modal-header {
+    padding: 18px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-title { margin: 0; font-size: 18px; font-weight: 600; }
+  .modal-close {
+    appearance: none; border: none; background: transparent;
+    color: var(--muted); font-size: 24px; cursor: pointer;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; transition: background .2s, color .2s;
+  }
+  .modal-close:hover { background: rgba(93, 251, 255, 0.12); color: var(--text); }
+  .modal-body { padding: 20px; }
+  .modal-section { margin-bottom: 24px; }
+  .modal-section:last-child { margin-bottom: 0; }
+  .modal-section-title {
+    font-size: 15px; font-weight: 600; color: var(--accent);
+    margin: 0 0 12px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .modal-section-desc { font-size: 13px; color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
+  .modal-option {
+    display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px;
+    background: rgba(11, 18, 46, 0.6); border: 1px solid var(--border);
+    margin-bottom: 10px; transition: background .2s, border-color .2s;
+  }
+  .modal-option:hover { background: rgba(11, 18, 46, 0.8); border-color: rgba(93, 251, 255, 0.3); }
+  .modal-option-label { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .modal-option-name { font-weight: 600; color: var(--text); font-size: 14px; }
+  .modal-option-hint { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .modal-option-status { font-size: 11px; color: var(--accent); margin-top: 4px; }
+  
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; bottom: 20px; right: 20px; z-index: 200;
+    display: flex; flex-direction: column; gap: 10px; max-width: 400px;
+  }
+  .toast {
+    background: linear-gradient(135deg, rgba(13, 20, 48, 0.95), rgba(9, 16, 38, 0.95));
+    border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 10px 30px rgba(2, 8, 23, 0.6), 0 0 20px rgba(93, 251, 255, 0.15);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: start; gap: 10px;
+    animation: toastSlide 0.3s ease-out;
+  }
+  @keyframes toastSlide {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .toast-icon { font-size: 18px; line-height: 1; }
+  .toast-content { flex: 1; }
+  .toast-title { font-weight: 600; color: var(--text); margin: 0 0 4px; font-size: 14px; }
+  .toast-message { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.4; }
+  .toast.error { border-left: 3px solid #ff4757; }
+  .toast.success { border-left: 3px solid #5dfbff; }
+  .toast.warning { border-left: 3px solid #ffa502; }
   .tree-root { margin-top: 4px; }
   details.tree-dir { padding-left: 0; margin: 2px 0 2px; }
   details.tree-dir > summary {
@@ -306,7 +375,10 @@
         <div class="hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</div>
         <div class="folder-path" id="folderPath" aria-live="polite">No folder selected.</div>
       </div>
-      <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
+      <div style="display: flex; gap: 10px;">
+        <button class="choose" id="settingsBtn" title="Settings">⚙️ Settings</button>
+        <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
+      </div>
     </header>
 
     <div class="wrap">
@@ -365,6 +437,39 @@
     </footer>
   </div>
 
+  <!-- Settings Modal -->
+  <div class="modal-backdrop" id="settingsModal" role="dialog" aria-labelledby="settingsModalTitle" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="settingsModalTitle">Settings</h2>
+        <button class="modal-close" id="closeSettingsBtn" aria-label="Close settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <section class="modal-section">
+          <h3 class="modal-section-title">OBS Metadata Export</h3>
+          <p class="modal-section-desc">
+            Export currently playing track metadata to a text file for use in OBS overlays and streaming software.
+            The file updates automatically whenever the track changes.
+          </p>
+          
+          <div class="modal-option">
+            <div class="modal-option-label">
+              <div class="modal-option-name">Text File Export</div>
+              <div class="modal-option-hint">
+                Save "Title – Artist" to a text file. Requires Chromium-based browser (Chrome, Edge, Opera).
+              </div>
+              <div class="modal-option-status" id="textFileStatus">Not configured</div>
+            </div>
+            <button class="ctrl" id="configureTextFileBtn" style="min-width: 100px;">Configure</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
   <audio id="audio" class="hide" preload="metadata"></audio>
 
 <script>
@@ -393,6 +498,14 @@
   const vizModeSel  = document.getElementById('vizMode');
   const vizCanvas   = document.getElementById('vizCanvas');
   const vizStatusEl = document.getElementById('vizStatus');
+  
+  // Settings modal elements
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsModal = document.getElementById('settingsModal');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const configureTextFileBtn = document.getElementById('configureTextFileBtn');
+  const textFileStatus = document.getElementById('textFileStatus');
+  const toastContainer = document.getElementById('toastContainer');
 
   /** Persistence */
   const DB_NAME = 'lwa-player';
@@ -404,6 +517,8 @@
   const ANNOUNCE_KEY = 'lwa-announce-enabled';
   const VIZ_MODE_KEY = 'lwa-viz-mode';
   const VOLUME_KEY = 'lwa-volume';
+  const TEXT_FILE_HANDLE_KEY = 'text-file-handle';
+  const TEXT_FILE_ENABLED_KEY = 'text-file-enabled';
   let handleDbPromise = null;
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -1216,6 +1331,179 @@
     return { supported: true, speak, cancel };
   }
 
+  /** Text File Export for OBS */
+  let textFileHandle = null;
+  let textFileEnabled = false;
+  
+  const showToast = (message, type = 'info', title = '') => {
+    if (!toastContainer) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = { error: '⚠️', success: '✓', warning: '⚠️', info: 'ℹ️' };
+    const icon = document.createElement('div');
+    icon.className = 'toast-icon';
+    icon.textContent = icons[type] || icons.info;
+    
+    const content = document.createElement('div');
+    content.className = 'toast-content';
+    
+    if (title) {
+      const titleEl = document.createElement('div');
+      titleEl.className = 'toast-title';
+      titleEl.textContent = title;
+      content.appendChild(titleEl);
+    }
+    
+    const messageEl = document.createElement('div');
+    messageEl.className = 'toast-message';
+    messageEl.textContent = message;
+    content.appendChild(messageEl);
+    
+    toast.appendChild(icon);
+    toast.appendChild(content);
+    toastContainer.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.transition = 'opacity 0.3s, transform 0.3s';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(400px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  };
+  
+  const updateTextFileStatus = () => {
+    if (!textFileStatus) return;
+    if (textFileEnabled && textFileHandle) {
+      textFileStatus.textContent = `Active – ${textFileHandle.name}`;
+      textFileStatus.style.color = 'var(--accent)';
+      if (configureTextFileBtn) {
+        configureTextFileBtn.textContent = 'Disable';
+      }
+    } else {
+      textFileStatus.textContent = 'Not configured';
+      textFileStatus.style.color = 'var(--muted)';
+      if (configureTextFileBtn) {
+        configureTextFileBtn.textContent = 'Configure';
+      }
+    }
+  };
+  
+  const writeToTextFile = async (content) => {
+    if (!textFileEnabled || !textFileHandle) return;
+    
+    try {
+      const writable = await textFileHandle.createWritable();
+      await writable.write(content);
+      await writable.close();
+    } catch (err) {
+      console.error('Failed to write to text file', err);
+      showToast('Failed to update text file. Check browser permissions.', 'error', 'Export Error');
+      // Don't disable on error - user might have temporarily revoked permission
+    }
+  };
+  
+  const exportCurrentTrack = async () => {
+    if (!textFileEnabled || current < 0 || !tracks[current]) return;
+    
+    const track = tracks[current];
+    const details = buildAnnouncementDetails(track);
+    const title = details.title || track.displayName || 'Unknown Track';
+    const artist = details.artist || 'Unknown Artist';
+    const content = `${title} – ${artist}`;
+    
+    await writeToTextFile(content);
+  };
+  
+  const loadTextFileConfig = async () => {
+    try {
+      const enabled = await getStoreValue(TEXT_FILE_ENABLED_KEY);
+      textFileEnabled = Boolean(enabled);
+      
+      if (textFileEnabled) {
+        const handle = await getStoreValue(TEXT_FILE_HANDLE_KEY);
+        if (handle) {
+          // Verify we still have permission
+          const permission = await handle.queryPermission({ mode: 'readwrite' });
+          if (permission === 'granted') {
+            textFileHandle = handle;
+          } else {
+            // Request permission again
+            const newPerm = await handle.requestPermission({ mode: 'readwrite' });
+            if (newPerm === 'granted') {
+              textFileHandle = handle;
+            } else {
+              textFileEnabled = false;
+              textFileHandle = null;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load text file configuration', err);
+      textFileEnabled = false;
+      textFileHandle = null;
+    }
+    
+    updateTextFileStatus();
+  };
+  
+  const configureTextFile = async () => {
+    // Check if File System Access API is supported
+    if (!('showSaveFilePicker' in window)) {
+      showToast('Text file export requires a Chromium-based browser (Chrome, Edge, Opera).', 'error', 'Unsupported Browser');
+      return;
+    }
+    
+    // If already enabled, disable it
+    if (textFileEnabled && textFileHandle) {
+      textFileEnabled = false;
+      textFileHandle = null;
+      await putStoreValue(TEXT_FILE_ENABLED_KEY, false);
+      await putStoreValue(TEXT_FILE_HANDLE_KEY, null);
+      updateTextFileStatus();
+      showToast('Text file export disabled.', 'success', 'Export Disabled');
+      return;
+    }
+    
+    // Otherwise, configure a new file
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: 'now-playing.txt',
+        types: [{
+          description: 'Text Files',
+          accept: { 'text/plain': ['.txt'] }
+        }]
+      });
+      
+      // Test write access
+      const writable = await handle.createWritable();
+      await writable.write('Waiting for playback...');
+      await writable.close();
+      
+      textFileHandle = handle;
+      textFileEnabled = true;
+      
+      await putStoreValue(TEXT_FILE_HANDLE_KEY, handle);
+      await putStoreValue(TEXT_FILE_ENABLED_KEY, true);
+      
+      updateTextFileStatus();
+      showToast(`Now exporting to ${handle.name}`, 'success', 'Export Enabled');
+      
+      // Export current track if playing
+      if (current >= 0 && tracks[current]) {
+        await exportCurrentTrack();
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        // User cancelled, ignore
+        return;
+      }
+      console.error('Failed to configure text file', err);
+      showToast('Failed to configure text file. Please try again.', 'error', 'Configuration Error');
+    }
+  };
+
   const revokeAll = () => {
     tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
   };
@@ -1507,6 +1795,11 @@
     putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
       console.error('Failed storing last track', err);
     });
+    
+    // Export to text file if enabled
+    exportCurrentTrack().catch(err => {
+      console.error('Failed exporting track to text file', err);
+    });
 
     // Reset UI time
     seek.value = 0;
@@ -1600,6 +1893,31 @@
       if (e?.name !== 'AbortError') console.error(e);
     }
   });
+  
+  // Settings modal handlers
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      settingsModal?.classList.add('show');
+    });
+  }
+  
+  if (closeSettingsBtn) {
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal?.classList.remove('show');
+    });
+  }
+  
+  if (settingsModal) {
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        settingsModal.classList.remove('show');
+      }
+    });
+  }
+  
+  if (configureTextFileBtn) {
+    configureTextFileBtn.addEventListener('click', configureTextFile);
+  }
 
   playPauseBtn.addEventListener('click', async () => {
     if (!tracks.length) return;
@@ -1750,6 +2068,11 @@
 
   // Clean up object URLs when leaving
   window.addEventListener('beforeunload', revokeAll);
+
+  // Load text file export configuration
+  loadTextFileConfig().catch(err => {
+    console.error('Failed to load text file configuration', err);
+  });
 
   // Restore previous folder if permission remains granted
   (async () => {
