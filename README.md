@@ -14,6 +14,7 @@ I created this because:
 - Offers optional voice announcements for track transitions with customizable voice selection.
 - Shows the current track number in the Now Playing header for quick reference.
 - Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo). The selector is disabled if the browser lacks AudioContext support.
+- Supports volume control via on-screen slider and Up/Down arrow keys (5% increments). Volume preference is persisted between sessions.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
@@ -33,6 +34,10 @@ I created this because:
 - Toggle speech off/on during playback to verify announcements resume without disturbing audio when disabled.
 - Start playback and confirm the Now Playing header shows the expected track number, updating as you skip forward or back.
 - Start playback, open the Spectrum Analyzer selector, and confirm Neon Bars, Glow Wave, and Pulse Halo update live without interrupting audio. Pause playback and ensure the visualization stops animating until playback resumes.
+- Adjust volume with the slider and confirm audio volume changes accordingly.
+- Press Up arrow key to increase volume by 5%; press Down arrow key to decrease volume by 5%.
+- Reload the page and confirm the volume setting is restored.
+- Test that Up/Down arrow keys work when the player has focus, but do not interfere with scrolling behavior in the track list or other elements.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
@@ -45,3 +50,6 @@ yt-dlp -x --audio-format mp3 {URL}
 Examples:
 * My `Utho Riley` playlist: yt-dlp -x --audio-format mp3 PLNtyAG9UO9oeMDT193y8Zno_E8U4MMtIU
 * My `White Bat Audio` playlist: yt-dlp -x --audio-format mp3 PLNtyAG9UO9odGA1KzBuVsern15RexNfjQ
+
+### TODO
+
