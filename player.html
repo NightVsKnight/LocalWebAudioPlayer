@@ -1412,7 +1412,7 @@
     const details = buildAnnouncementDetails(track);
     const title = details.title || track.displayName || 'Unknown Track';
     const artist = details.artist || 'Unknown Artist';
-    const content = `${title} – ${artist}`;
+    const content = `${title} - ${artist}`;
     
     await writeToTextFile(content);
   };
