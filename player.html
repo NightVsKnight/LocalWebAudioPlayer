@@ -698,16 +698,16 @@
 
   /**
    * Calculate logarithmic frequency bin indices for balanced spectrum display.
-   * Maps barCount visual bars to frequency bins covering 20Hz-20kHz range.
+   * Maps barCount visual bars logarithmically from 20 Hz to Nyquist frequency.
    * Returns array of {startBin, endBin} for each bar to average multiple bins.
    * 
-   * Note: We extend slightly beyond 20kHz to ensure frequencies at the upper
-   * limit (18-20kHz) are fully captured, accounting for FFT bin resolution.
+   * By extending to Nyquist (e.g., 22.05 kHz @ 44.1 kHz sample rate or 24 kHz
+   * @ 48 kHz sample rate), we ensure frequencies at the upper audible limit
+   * (18-20 kHz) have adequate FFT bins for accurate visualization.
    */
   const calculateLogFreqBins = (sampleRate, fftSize, barCount) => {
     const minFreq = 20;    // 20 Hz - lowest audible frequency
-    const maxFreq = 20000; // 20 kHz - highest audible frequency
-    const nyquist = sampleRate / 2;
+    const nyquist = sampleRate / 2;  // e.g., 22050 Hz @ 44.1kHz, 24000 Hz @ 48kHz
     const binCount = fftSize / 2;
     const freqPerBin = nyquist / binCount;
 
