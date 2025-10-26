@@ -326,9 +326,9 @@
         </div>
 
         <div class="controls" role="group" aria-label="Playback controls">
-          <button class="ctrl" id="prevBtn" title="Previous (←)">⏮ Prev</button>
+          <button class="ctrl" id="prevBtn" title="Previous (Cmd/Ctrl+←)">⏮ Prev</button>
           <button class="ctrl" id="playPauseBtn" title="Space">▶️ Play</button>
-          <button class="ctrl" id="nextBtn" title="Next (→)">⏭ Next</button>
+          <button class="ctrl" id="nextBtn" title="Next (Cmd/Ctrl+→)">⏭ Next</button>
         </div>
 
         <div class="seek">
@@ -360,7 +360,7 @@
     </div>
 
     <footer>
-      <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Prev/Next · <span class="kbd">↑/↓</span> Volume · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop · <span class="kbd">A</span> Announce</div>
+      <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Seek · <span class="kbd">Cmd/Ctrl+←/→</span> Prev/Next · <span class="kbd">↑/↓</span> Volume · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop · <span class="kbd">A</span> Announce</div>
       <div id="count">0 tracks</div>
     </footer>
   </div>
@@ -1389,6 +1389,7 @@
   }
 
   const VOLUME_STEP = 5;  // 5% volume change per arrow key press
+  const SEEK_STEP = 5;     // 5 seconds seek forward/backward per arrow key press
 
   function setVolume(value, { persist = true } = {}) {
     const clampedValue = Math.max(0, Math.min(100, Math.round(value)));
@@ -1406,6 +1407,11 @@
   function adjustVolume(delta) {
     const currentVolume = Math.round(audio.volume * 100);
     setVolume(currentVolume + delta);
+  }
+
+  function seekBy(seconds) {
+    if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration));
   }
 
   async function playIndex(idx, {autoplay=true, skipReason='auto'} = {}) {
@@ -1615,17 +1621,33 @@
       playPauseBtn.click(); 
     }
     else if (e.key === 'ArrowRight') {
-      // Only prevent default if not focused on a horizontally scrollable playlist
-      if (!(isListFocused && isListHScrollable)) {
+      // Check for Cmd (Mac) or Ctrl (Windows/Linux) modifier
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl + Right → next track
         e.preventDefault();
         nextBtn.click();
+      } else {
+        // Plain Right → seek forward 5 seconds
+        // Only prevent default if not focused on a horizontally scrollable playlist
+        if (!(isListFocused && isListHScrollable)) {
+          e.preventDefault();
+          seekBy(SEEK_STEP);
+        }
       }
     }
     else if (e.key === 'ArrowLeft') {
-      // Only prevent default if not focused on a horizontally scrollable playlist
-      if (!(isListFocused && isListHScrollable)) {
+      // Check for Cmd (Mac) or Ctrl (Windows/Linux) modifier
+      if (e.metaKey || e.ctrlKey) {
+        // Cmd/Ctrl + Left → previous track
         e.preventDefault();
         prevBtn.click();
+      } else {
+        // Plain Left → seek backward 5 seconds
+        // Only prevent default if not focused on a horizontally scrollable playlist
+        if (!(isListFocused && isListHScrollable)) {
+          e.preventDefault();
+          seekBy(-SEEK_STEP);
+        }
       }
     }
     else if (e.key === 'ArrowUp') {
