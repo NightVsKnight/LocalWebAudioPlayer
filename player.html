@@ -180,7 +180,7 @@
 
     padding: 12px;
     background: rgba(11, 18, 46, 0.78); border: 1px solid var(--border); border-radius: 14px;
-    display: grid; box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
+    box-shadow: 0 0 22px rgba(93, 251, 255, 0.08);
   }
   /* volume inner container used for the label and track */
   .volume-panel .volume-label { text-align: center; }
@@ -248,7 +248,7 @@
   .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
 
   .list {
-    padding: 12px; overflow: auto; height: 610px;
+    padding: 12px; overflow: auto; max-height: 520px;
     background: linear-gradient(180deg, rgba(8, 14, 36, 0.55), rgba(8, 14, 36, 0.2));
   }
   .item {
@@ -1494,37 +1494,43 @@
     // Skip if select element is focused (for visualizer dropdown)
     if (e.target.tagName === 'SELECT') return;
     
+    // Get playlist element and check if it's scrollable (for arrow key checks)
+    const list = document.getElementById('list');
+    const isListFocused = list && (list === e.target || list.contains(e.target));
+    const isListHScrollable = list && list.scrollWidth > list.clientWidth;
+    const isListVScrollable = list && list.scrollHeight > list.clientHeight;
+    
     if (e.code === 'Space') { 
       e.preventDefault(); 
       playPauseBtn.click(); 
     }
     else if (e.key === 'ArrowRight') {
-      // Only prevent default if not focused on a scrollable playlist
-      const playlist = document.getElementById('playlist');
-      const isPlaylistFocused = playlist && (playlist === e.target || playlist.contains(e.target));
-      const isPlaylistScrollable = playlist && playlist.scrollWidth > playlist.clientWidth;
-      if (!(isPlaylistFocused && isPlaylistScrollable)) {
+      // Only prevent default if not focused on a horizontally scrollable playlist
+      if (!(isListFocused && isListHScrollable)) {
         e.preventDefault();
         nextBtn.click();
       }
     }
     else if (e.key === 'ArrowLeft') {
-      // Only prevent default if not focused on a scrollable playlist
-      const playlist = document.getElementById('playlist');
-      const isPlaylistFocused = playlist && (playlist === e.target || playlist.contains(e.target));
-      const isPlaylistScrollable = playlist && playlist.scrollWidth > playlist.clientWidth;
-      if (!(isPlaylistFocused && isPlaylistScrollable)) {
+      // Only prevent default if not focused on a horizontally scrollable playlist
+      if (!(isListFocused && isListHScrollable)) {
         e.preventDefault();
         prevBtn.click();
       }
     }
     else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      adjustVolume(VOLUME_STEP);
+      // Only prevent default if not focused on a vertically scrollable playlist
+      if (!(isListFocused && isListVScrollable)) {
+        e.preventDefault();
+        adjustVolume(VOLUME_STEP);
+      }
     }
     else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      adjustVolume(-VOLUME_STEP);
+      // Only prevent default if not focused on a vertically scrollable playlist
+      if (!(isListFocused && isListVScrollable)) {
+        e.preventDefault();
+        adjustVolume(-VOLUME_STEP);
+      }
     }
     else if (e.key.toLowerCase() === 's') shuffleBtn.click();
     else if (e.key.toLowerCase() === 'l') loopBtn.click();
