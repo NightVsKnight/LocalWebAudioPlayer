@@ -2098,7 +2098,10 @@
   window.addEventListener('beforeunload', revokeAll);
 
   // Load text file export configuration
-  loadTextFileConfig().catch(err => {
+  loadTextFileConfig().then(() => {
+    // Clear the file on startup to avoid showing stale data
+    return clearTextFileExport();
+  }).catch(err => {
     console.error('Failed to load text file configuration', err);
   });
 
