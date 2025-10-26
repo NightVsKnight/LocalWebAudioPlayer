@@ -270,6 +270,7 @@
     padding: 2px 6px; border-radius: 6px; color: var(--text); box-shadow: 0 0 12px rgba(93, 251, 255, 0.12);
   }
   .hide { display: none !important; }
+  .button-group { display: flex; gap: 10px; }
   
   /* Settings modal */
   .modal-backdrop {
@@ -375,7 +376,7 @@
         <div class="hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</div>
         <div class="folder-path" id="folderPath" aria-live="polite">No folder selected.</div>
       </div>
-      <div style="display: flex; gap: 10px;">
+      <div class="button-group">
         <button class="choose" id="settingsBtn" title="Settings">⚙️ Settings</button>
         <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
       </div>
@@ -1340,7 +1341,7 @@
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     
-    const icons = { error: '⚠️', success: '✓', warning: '⚠️', info: 'ℹ️' };
+    const icons = { error: '❌', success: '✓', warning: '⚠️', info: 'ℹ️' };
     const icon = document.createElement('div');
     icon.className = 'toast-icon';
     icon.textContent = icons[type] || icons.info;
@@ -1423,19 +1424,25 @@
       if (textFileEnabled) {
         const handle = await getStoreValue(TEXT_FILE_HANDLE_KEY);
         if (handle) {
-          // Verify we still have permission
-          const permission = await handle.queryPermission({ mode: 'readwrite' });
-          if (permission === 'granted') {
-            textFileHandle = handle;
-          } else {
-            // Request permission again
-            const newPerm = await handle.requestPermission({ mode: 'readwrite' });
-            if (newPerm === 'granted') {
+          try {
+            // Verify we still have permission
+            const permission = await handle.queryPermission({ mode: 'readwrite' });
+            if (permission === 'granted') {
               textFileHandle = handle;
             } else {
-              textFileEnabled = false;
-              textFileHandle = null;
+              // Request permission again
+              const newPerm = await handle.requestPermission({ mode: 'readwrite' });
+              if (newPerm === 'granted') {
+                textFileHandle = handle;
+              } else {
+                textFileEnabled = false;
+                textFileHandle = null;
+              }
             }
+          } catch (permErr) {
+            console.warn('Failed to verify file permissions', permErr);
+            textFileEnabled = false;
+            textFileHandle = null;
           }
         }
       }
@@ -1495,7 +1502,7 @@
         await exportCurrentTrack();
       }
     } catch (err) {
-      if (err?.name === 'AbortError') {
+      if (err && err.name === 'AbortError') {
         // User cancelled, ignore
         return;
       }
@@ -1544,6 +1551,13 @@
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = '—';
     applyNowTrackMetrics();
     countEl.textContent = 'Scanning…';
+    
+    // Clear text file export while scanning
+    if (textFileEnabled && textFileHandle) {
+      writeToTextFile('Waiting for playback...').catch(err => {
+        console.warn('Failed to clear text file during scan', err);
+      });
+    }
 
     try {
       for await (const entry of walk(dirHandle)) {
