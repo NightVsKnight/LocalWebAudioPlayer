@@ -1411,6 +1411,7 @@
 
   function seekBy(seconds) {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
+    if (!isFinite(audio.currentTime)) return;
     audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration));
   }
 
