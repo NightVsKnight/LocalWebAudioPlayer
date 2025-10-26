@@ -554,10 +554,10 @@
         }
       });
       navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (tracks.length) playIndex(prevIndex(), { autoplay: true });
+        if (tracks.length) playIndex(prevIndex(), { autoplay: true, skipReason: 'manual' });
       });
       navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (tracks.length) playIndex(nextIndex(), { autoplay: true });
+        if (tracks.length) playIndex(nextIndex(), { autoplay: true, skipReason: 'manual' });
       });
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -939,7 +939,7 @@
     return { title, artist, summary };
   };
 
-  const recordPendingAnnouncement = (track) => {
+  const recordPendingAnnouncement = (track, { skipReason = 'auto' } = {}) => {
     if (!track) {
       pendingAnnouncement = null;
       return null;
@@ -951,13 +951,14 @@
       title,
       artist,
       summary,
+      skipReason,
     };
     return details;
   };
 
   const maybeAnnounceCurrentTrack = () => {
     if (!pendingAnnouncement) return;
-    const { key, summary, artist, title } = pendingAnnouncement;
+    const { key, summary, artist, title, skipReason } = pendingAnnouncement;
     pendingAnnouncement = null;
     if (!summary) return;
 
@@ -979,7 +980,9 @@
           : lastAnnouncedTitle;
       }
       if (previousDescription) {
-        message = `That was ${previousDescription}. `;
+        // Use "Skipped" for manual transitions, "That was" for automatic
+        const transitionVerb = skipReason === 'manual' ? 'Skipped' : 'That was';
+        message = `${transitionVerb} ${previousDescription}. `;
       }
     }
     let sameArtist = false;
@@ -1325,11 +1328,11 @@
     durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
 
     row.append(icon, nameEl, durEl);
-    row.addEventListener('click', () => playIndex(index, {autoplay:true}));
+    row.addEventListener('click', () => playIndex(index, {autoplay:true, skipReason:'manual'}));
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        playIndex(index, {autoplay:true});
+        playIndex(index, {autoplay:true, skipReason:'manual'});
       }
     });
 
@@ -1405,14 +1408,14 @@
     setVolume(currentVolume + delta);
   }
 
-  async function playIndex(idx, {autoplay=true} = {}) {
+  async function playIndex(idx, {autoplay=true, skipReason='auto'} = {}) {
     if (!tracks.length) return;
     if (idx < 0) idx = 0;
     if (idx >= tracks.length) idx = tracks.length - 1;
     current = idx;
 
     const tr = tracks[current];
-    const details = recordPendingAnnouncement(tr);
+    const details = recordPendingAnnouncement(tr, { skipReason });
     audio.src = tr.url;
     if (nowTitleEl) nowTitleEl.textContent = tr.displayName;
     if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
@@ -1525,8 +1528,8 @@
     }
   });
 
-  nextBtn.addEventListener('click', () => playIndex(nextIndex(), {autoplay:true}));
-  prevBtn.addEventListener('click', () => playIndex(prevIndex(), {autoplay:true}));
+  nextBtn.addEventListener('click', () => playIndex(nextIndex(), {autoplay:true, skipReason:'manual'}));
+  prevBtn.addEventListener('click', () => playIndex(prevIndex(), {autoplay:true, skipReason:'manual'}));
 
   shuffleBtn.addEventListener('click', () => {
     shuffle = !shuffle;
