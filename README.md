@@ -13,7 +13,7 @@ I created this because:
 - Restores the last played track when available, otherwise falls back to the first track.
 - Offers optional voice announcements for track transitions with customizable voice selection.
 - Shows the current track number in the Now Playing header for quick reference.
-- Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo). The selector is disabled if the browser lacks AudioContext support.
+- Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo) with logarithmic frequency mapping for balanced display across the audible spectrum (20Hz-20kHz). The selector is disabled if the browser lacks AudioContext support.
 - Supports volume control via on-screen slider and Up/Down arrow keys (5% increments). Volume preference is persisted between sessions.
 - Integrates with OS media controls (Bluetooth headsets, keyboard media keys, system tray) via the Media Session API.
 
@@ -55,6 +55,26 @@ The player integrates with your operating system's media controls using the Medi
 The Media Session API is supported in modern Chromium-based browsers (Chrome, Edge, Opera) and Firefox. On unsupported browsers, the feature gracefully degrades—the player continues to work normally but without OS-level media control integration.
 
 No special permissions or browser flags are required; the feature works automatically when supported.
+
+## Spectrum Analyzer
+
+The spectrum analyzer visualizations use logarithmic frequency mapping to provide a balanced view of the audio spectrum:
+
+- **Frequency Range**: Displays 20Hz to 20kHz, the full range of human hearing.
+- **Logarithmic Mapping**: Frequencies are mapped logarithmically rather than linearly, ensuring that bass, mids, and treble are all visible and proportional. This means that high-frequency content (like cymbals, hi-hats, and test tones at 16-20kHz) will be clearly visible.
+- **Dynamic Range**: Uses -100 to 0 dBFS for amplitude, providing good sensitivity to both quiet and loud sounds.
+- **Visualization Modes**:
+  - **Neon Bars**: Vertical bars showing frequency distribution
+  - **Glow Wave**: Oscilloscope-style waveform display
+  - **Pulse Halo**: Radial frequency visualization
+
+### Testing the Analyzer
+
+The `media/Tests` folder contains test tones and noise files that can verify the analyzer's accuracy:
+
+- **Test Tones**: Files like `16000 Hz Test Tone`, `18000 Hz Test Tone`, and `20000 Hz Test Tone` should appear in the high-frequency region of the spectrum.
+- **White Noise**: Should show activity across the entire frequency range when played at full volume, with relatively even distribution on Neon Bars and Pulse Halo modes.
+- **Frequency Sweep**: The `20 - 20,000 Hz Audio Sweep` should show activity moving progressively from left (low) to right (high) across the spectrum.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
