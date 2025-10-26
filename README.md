@@ -60,8 +60,8 @@ No special permissions or browser flags are required; the feature works automati
 
 The spectrum analyzer visualizations use logarithmic frequency mapping to provide a balanced view of the audio spectrum:
 
-- **Frequency Range**: Displays 20Hz to 20kHz, the full range of human hearing.
-- **Logarithmic Mapping**: Frequencies are mapped logarithmically rather than linearly, ensuring that bass, mids, and treble are all visible and proportional. This means that high-frequency content (like cymbals, hi-hats, and test tones at 16-20kHz) will be clearly visible.
+- **Frequency Range**: Displays 20 Hz to 20 kHz, the full range of human hearing.
+- **Logarithmic Mapping**: Frequencies are mapped logarithmically rather than linearly, ensuring that bass, mids, and treble are all visible and proportional. This means that high-frequency content (like cymbals, hi-hats, and test tones at 16-20 kHz) will be clearly visible.
 - **Dynamic Range**: Uses -100 to 0 dBFS for amplitude, providing good sensitivity to both quiet and loud sounds.
 - **Visualization Modes**:
   - **Neon Bars**: Vertical bars showing frequency distribution
@@ -70,11 +70,11 @@ The spectrum analyzer visualizations use logarithmic frequency mapping to provid
 
 ### Testing the Analyzer
 
-The `media/Tests` folder contains test tones and noise files that can verify the analyzer's accuracy:
+The `media/Tests/Sonic Electronix` folder contains test tones and noise files that can verify the analyzer's accuracy:
 
-- **Test Tones**: Files like `16000 Hz Test Tone`, `18000 Hz Test Tone`, and `20000 Hz Test Tone` should appear in the high-frequency region of the spectrum.
-- **White Noise**: Should show activity across the entire frequency range when played at full volume, with relatively even distribution on Neon Bars and Pulse Halo modes.
-- **Frequency Sweep**: The `20 - 20,000 Hz Audio Sweep` should show activity moving progressively from left (low) to right (high) across the spectrum.
+- **High-Frequency Test Tones**: Files like `16000 Hz Test Tone [K15bC8w5MrA].mp3`, `18000 Hz Test Tone [3tBI-T2SQgQ].mp3`, and `20000 Hz Test Tone [0DyVytR5aO4].mp3` should appear in the high-frequency region (right side) of the spectrum.
+- **White Noise**: `White Noise [IMRj1ombxqY].mp3` should show activity across the entire frequency range when played at full volume, with relatively even distribution on Neon Bars and Pulse Halo modes.
+- **Frequency Sweep**: `20 - 20,000 Hz Audio Sweep ｜ Range of Human Hearing [PAsMlDptjx8].mp3` should show activity moving progressively from left (low) to right (high) across the spectrum.
 
 ## Media
 I use yt-dlp to download from YouTube playlists.
