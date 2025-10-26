@@ -41,7 +41,8 @@ This is a single-page web audio player application that uses modern browser APIs
 ## Important Constraints and Gotchas
 
 ### File System Access API Limitations
-- Absolute file paths are not available through this API
+- System-level absolute paths are not reliably available through this API
+- The API provides sandboxed file handles rather than traditional file paths
 - Only expose file/folder names and handles, never attempt to show full paths
 - Always request and verify permissions before accessing stored directory handles
 
@@ -159,9 +160,10 @@ Example commit message:
 ```
 ✨ Add keyboard volume control
 
-Implement Up/Down arrow key handlers for volume adjustment in 5%
-increments. Volume changes are persisted to IndexedDB and respect
-focus context to avoid interfering with list scrolling.
+Implement Up/Down arrow key handlers for volume adjustment
+in 5% increments. Volume changes are persisted to IndexedDB
+and respect focus context to avoid interfering with list
+scrolling.
 ```
 
 ## Pull Request Guidelines
@@ -174,7 +176,7 @@ focus context to avoid interfering with list scrolling.
 
 ## Resources
 
-- [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)
+- [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) ([Browser Compatibility](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API#browser_compatibility))
 - [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
 - [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API)
 - [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
