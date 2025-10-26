@@ -560,18 +560,23 @@
         if (tracks.length) playIndex(nextIndex(), { autoplay: true });
       });
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        if (!isFinite(audio.duration) || audio.duration <= 0) return;
         const skipTime = details.seekOffset || 10;
         audio.currentTime = Math.max(audio.currentTime - skipTime, 0);
       });
       navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        if (!isFinite(audio.duration) || audio.duration <= 0) return;
         const skipTime = details.seekOffset || 10;
         audio.currentTime = Math.min(audio.currentTime + skipTime, audio.duration);
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (!isFinite(audio.duration) || audio.duration <= 0) return;
+        if (typeof details.seekTime !== 'number' || details.seekTime < 0) return;
+        const targetTime = Math.min(details.seekTime, audio.duration);
         if (details.fastSeek && 'fastSeek' in audio) {
-          audio.fastSeek(details.seekTime);
+          audio.fastSeek(targetTime);
         } else {
-          audio.currentTime = details.seekTime;
+          audio.currentTime = targetTime;
         }
       });
     } catch (err) {
