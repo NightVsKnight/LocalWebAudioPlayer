@@ -26,7 +26,7 @@ Export currently playing track metadata to a text file that updates automaticall
 1. Click the **⚙️ Settings** button in the top-right corner
 2. In the settings modal, click **Configure** under "Text File Export"
 3. Choose or create a text file (e.g., `now-playing.txt`)
-4. The file will update automatically with `Title – Artist` whenever the track changes
+4. The file updates automatically with `Title – Artist` while playback is active; it stays blank when tracks are paused or stopped
 5. **The file is cleared (emptied) when:**
    - Playback is paused
    - Playback stops at the end of the playlist (with loop off)
@@ -134,4 +134,3 @@ Examples:
 * `Sonic Electronix` `Test Tones` playlist: yt-dlp -x --audio-format mp3 PLzFvCAfIq7a2SIBfDhpCytfJ4RHVb_KLY
 
 ### TODO
-

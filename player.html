@@ -1406,6 +1406,7 @@
   
   const exportCurrentTrack = async () => {
     if (!textFileEnabled || current < 0 || !tracks[current]) return;
+    if (!audio || audio.paused) return; // Only export when audio is actively playing
     
     const track = tracks[current];
     const details = buildAnnouncementDetails(track);
@@ -1815,11 +1816,6 @@
       console.error('Failed storing last track', err);
     });
     
-    // Export to text file if enabled
-    exportCurrentTrack().catch(err => {
-      console.error('Failed exporting track to text file', err);
-    });
-
     // Reset UI time
     seek.value = 0;
     tCur.textContent = '0:00';
@@ -1982,6 +1978,9 @@
     maybeAnnounceCurrentTrack();
     startVisualizer();
     updateMediaSessionPlaybackState('playing');
+    exportCurrentTrack().catch(err => {
+      console.error('Failed exporting track to text file', err);
+    });
   });
   audio.addEventListener('pause', () => {
     stopVisualizer({ state: 'paused' });
