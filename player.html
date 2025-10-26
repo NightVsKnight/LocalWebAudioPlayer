@@ -1416,6 +1416,11 @@
     await writeToTextFile(content);
   };
   
+  const clearTextFileExport = async () => {
+    if (!textFileEnabled) return;
+    await writeToTextFile('');
+  };
+  
   const loadTextFileConfig = async () => {
     try {
       const enabled = await getStoreValue(TEXT_FILE_ENABLED_KEY);
@@ -1485,7 +1490,7 @@
       
       // Test write access
       const writable = await handle.createWritable();
-      await writable.write('Waiting for playback...');
+      await writable.write('');
       await writable.close();
       
       textFileHandle = handle;
@@ -1554,7 +1559,7 @@
     
     // Clear text file export while scanning
     if (textFileEnabled && textFileHandle) {
-      writeToTextFile('Waiting for playback...').catch(err => {
+      clearTextFileExport().catch(err => {
         console.warn('Failed to clear text file during scan', err);
       });
     }
@@ -1981,6 +1986,9 @@
   audio.addEventListener('pause', () => {
     stopVisualizer({ state: 'paused' });
     updateMediaSessionPlaybackState('paused');
+    clearTextFileExport().catch(err => {
+      console.error('Failed to clear text file on pause', err);
+    });
   });
   audio.addEventListener('timeupdate', () => {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -2005,8 +2013,14 @@
       playIndex(nextIndex(), {autoplay:true});
     } else {
       // Off: if not last, go next; if last, stop at end.
-      if (current < tracks.length - 1) playIndex(current + 1, {autoplay:true});
-      else { playPauseBtn.textContent = '▶️ Play'; }
+      if (current < tracks.length - 1) {
+        playIndex(current + 1, {autoplay:true});
+      } else {
+        playPauseBtn.textContent = '▶️ Play';
+        clearTextFileExport().catch(err => {
+          console.error('Failed to clear text file at end of playlist', err);
+        });
+      }
     }
   });
 

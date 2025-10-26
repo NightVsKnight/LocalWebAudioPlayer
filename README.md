@@ -27,6 +27,10 @@ Export currently playing track metadata to a text file that updates automaticall
 2. In the settings modal, click **Configure** under "Text File Export"
 3. Choose or create a text file (e.g., `now-playing.txt`)
 4. The file will update automatically with `Title – Artist` whenever the track changes
+5. **The file is cleared (emptied) when:**
+   - Playback is paused
+   - Playback stops at the end of the playlist (with loop off)
+   - A new folder is being scanned
 
 ### In OBS Studio
 1. Add a **Text (GDI+)** source (or **Text (FreeType 2)** on Linux/macOS)
