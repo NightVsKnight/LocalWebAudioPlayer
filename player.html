@@ -1502,7 +1502,7 @@
         await exportCurrentTrack();
       }
     } catch (err) {
-      if (err && err.name === 'AbortError') {
+      if (err && typeof err === 'object' && err.name === 'AbortError') {
         // User cancelled, ignore
         return;
       }
