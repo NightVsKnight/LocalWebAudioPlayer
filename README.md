@@ -16,6 +16,40 @@ I created this because:
 - Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo) with logarithmic frequency mapping for balanced display across the audible spectrum (20Hz-20kHz). The selector is disabled if the browser lacks AudioContext support.
 - Supports volume control via on-screen slider and Up/Down arrow keys (5% increments). Volume preference is persisted between sessions.
 - Integrates with OS media controls (Bluetooth headsets, keyboard media keys, system tray) via the Media Session API.
+- **OBS Metadata Export:** Export "now playing" track metadata to a text file for use in OBS overlays and streaming software (Chromium browsers only).
+
+## OBS Metadata Export
+
+Export currently playing track metadata to a text file that updates automatically for use in OBS overlays, streaming software, or other applications.
+
+### How to Use
+1. Click the **⚙️ Settings** button in the top-right corner
+2. In the settings modal, click **Configure** under "Text File Export"
+3. Choose or create a text file (e.g., `now-playing.txt`)
+4. The file updates automatically with `Title – Artist` while playback is active; it stays blank when tracks are paused or stopped
+5. **The file is cleared (emptied) when:**
+   - Playback is paused
+   - Playback stops at the end of the playlist (with loop off)
+   - A new folder is being scanned
+
+### In OBS Studio
+1. Add a **Text (GDI+)** source (or **Text (FreeType 2)** on Linux/macOS)
+2. Enable **"Read from file"**
+3. Browse to the text file you configured in the player
+4. Customize the text appearance (font, color, effects) as desired
+5. The text will update automatically as tracks play
+
+### Browser Requirements
+- **Supported:** Chromium-based browsers (Chrome, Edge, Opera, Brave)
+- **Not supported:** Firefox, Safari (they lack File System Access API for persistent file writes)
+- The feature gracefully detects unsupported browsers and shows an appropriate message
+
+### Disabling
+Click **⚙️ Settings** → **Disable** to stop exporting. You can re-enable it anytime without reconfiguring the file.
+
+### Troubleshooting
+- If the file stops updating, browser permissions may have been revoked. Re-open Settings and click **Configure** again.
+- Export failures appear as toast notifications (bottom-right) and are logged to the console without interrupting playback.
 
 ## Speech Announcements
 - Toggle the `🗣 Announce` control (or press `A`) to enable spoken track transitions.
@@ -46,6 +80,10 @@ I created this because:
 - Test that Up/Down arrow keys work when the player has focus, but do not interfere with scrolling behavior in the track list or other elements.
 - Start playback and press keyboard media keys (Play/Pause, Next, Previous) or use Bluetooth headset controls to verify they control playback.
 - Check your OS media overlay (system tray, notification center, lock screen) and confirm it displays current track title and artist information.
+- **OBS Export:** Click Settings, configure a text file, load a music folder, start playback, and verify the text file contains "Title – Artist". Skip tracks and confirm the file updates automatically.
+- **OBS Export:** With export enabled, reload the page and verify export is still active (Settings should show "Active – filename.txt").
+- **OBS Export:** Click Disable in Settings, skip tracks, and verify the file no longer updates. Re-enable and verify updates resume.
+- **OBS Export (Firefox/Safari):** Open Settings and verify the Configure button shows an error toast about unsupported browser when clicked.
 
 ## OS Media Controls
 
@@ -96,4 +134,3 @@ Examples:
 * `Sonic Electronix` `Test Tones` playlist: yt-dlp -x --audio-format mp3 PLzFvCAfIq7a2SIBfDhpCytfJ4RHVb_KLY
 
 ### TODO
-
