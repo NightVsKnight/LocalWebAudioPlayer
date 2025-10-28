@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Per-tab Output → NDI Audio (setSinkId demo)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: .5rem; }
+    .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: .5rem 0; }
+    button, select, input[type="range"] { font-size: 1rem; padding: .5rem .75rem; }
+    .note { color: #555; font-size: .95rem; }
+    .err { color: #b00020; }
+    code { background: #f4f4f4; padding: .15rem .3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Route this page’s audio to a specific output (e.g., “NDI Audio”)</h1>
+
+  <p class="note">
+    Works in Chromium browsers (Chrome/Edge/Brave) on desktop when served over
+    <b>HTTPS</b> or <code>http://localhost</code>. Safari currently does not support <code>setSinkId()</code>.
+  </p>
+
+  <div class="row">
+    <button id="btnStart">Start test tone</button>
+    <button id="btnStop" disabled>Stop</button>
+    <label>Volume
+      <input id="gain" type="range" min="0" max="100" value="35" />
+    </label>
+  </div>
+
+  <hr/>
+
+  <h2>Pick output device</h2>
+
+  <div class="row">
+    <button id="btnPrompt">Pick with browser prompt (selectAudioOutput)</button>
+    <span class="note">Preferred: lets you pick “NDI Audio” without mic permission.</span>
+  </div>
+
+  <div class="row">
+    <button id="btnList">Show device list</button>
+    <select id="sinks" disabled></select>
+    <button id="btnApply" disabled>Apply</button>
+  </div>
+
+  <p id="status" class="note"></p>
+  <p id="error" class="err"></p>
+
+  <hr/>
+
+  <details>
+    <summary>Troubleshooting</summary>
+    <ul>
+      <li>Serve this file via <code>http://localhost</code> (<code>python3 -m http.server 8000</code>) or HTTPS.
+      </li>
+      <li>“NDI Audio” comes from installing <b>NDI Tools</b>. Confirm it appears in macOS
+        <i>System Settings → Sound → Output</i> and in <i>Audio MIDI Setup</i>.
+      </li>
+      <li>Device labels in the dropdown may be empty until you grant a one-time
+        permission (either the prompt button below or temporarily calling <code>getUserMedia({audio:true})</code>).
+      </li>
+      <li>Safari: no <code>setSinkId</code> yet. Use Chrome/Edge for this page.
+      </li>
+    </ul>
+  </details>
+
+  <!-- Hidden audio element that we can retarget with setSinkId -->
+  <audio id="out" autoplay></audio>
+
+  <script>
+  (function () {
+    const outEl = document.getElementById('out');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const gainSlider = document.getElementById('gain');
+
+    const btnPrompt = document.getElementById('btnPrompt');
+    const btnList = document.getElementById('btnList');
+    const sinksSel = document.getElementById('sinks');
+    const btnApply = document.getElementById('btnApply');
+
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+
+    let ac, osc, gainNode, mediaDest;
+
+    function setStatus(msg) { statusEl.textContent = msg || ''; }
+    function setError(msg) { errorEl.textContent = msg || ''; }
+
+    function supportsSinkId() {
+      return typeof outEl.setSinkId === 'function';
+    }
+
+    async function ensureAudioGraph() {
+      if (ac) return;
+      ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+      osc = ac.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = 440;
+
+      gainNode = ac.createGain();
+      gainNode.gain.value = gainSlider.value / 100;
+
+      mediaDest = ac.createMediaStreamDestination();
+      osc.connect(gainNode).connect(mediaDest);
+      outEl.srcObject = mediaDest.stream;
+    }
+
+    btnStart.addEventListener('click', async () => {
+      try {
+        await ensureAudioGraph();
+        osc.start();
+        await ac.resume();
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        setStatus('Playing 440 Hz test tone. Route it to “NDI Audio” below.');
+      } catch (e) {
+        setError('Failed to start audio: ' + e.message);
+      }
+    });
+
+    btnStop.addEventListener('click', () => {
+      try {
+        if (osc) { osc.stop(); }
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        setStatus('Stopped.');
+      } catch (e) {
+        setError('Failed to stop: ' + e.message);
+      }
+    });
+
+    gainSlider.addEventListener('input', () => {
+      if (gainNode) gainNode.gain.value = gainSlider.value / 100;
+    });
+
+    // Preferred: browser-owned device picker (no mic permission needed).
+    btnPrompt.addEventListener('click', async () => {
+      setError('');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.selectAudioOutput) {
+        setError('selectAudioOutput() not supported in this browser. Use Chrome/Edge.');
+        return;
+      }
+      try {
+        const sysDev = await navigator.mediaDevices.selectAudioOutput();
+        if (!sysDev || !sysDev.deviceId) {
+          setStatus('No device selected.');
+          return;
+        }
+        await ensureAudioGraph();
+        if (!supportsSinkId()) {
+          setError('This browser does not support setSinkId().');
+          return;
+        }
+        await outEl.setSinkId(sysDev.deviceId);
+        setStatus('Output routed to: ' + (sysDev.label || 'selected device'));
+      } catch (e) {
+        setError('selectAudioOutput failed: ' + e.message);
+      }
+    });
+
+    // Fallback: show a dropdown of audiooutput devices.
+    btnList.addEventListener('click', async () => {
+      setError('');
+      try {
+        // Try to get labels without mic; if empty, request a minimal mic permission once.
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        const haveLabels = devices.some(d => d.kind === 'audiooutput' && d.label);
+        if (!haveLabels) {
+          // Ask for one-time mic permission to reveal labels (Chrome requirement).
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(t => t.stop());
+            devices = await navigator.mediaDevices.enumerateDevices();
+          } catch (permErr) {
+            // If denied, we'll still populate IDs without labels.
+          }
+        }
+
+        const outs = devices.filter(d => d.kind === 'audiooutput');
+        sinksSel.innerHTML = '';
+        outs.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || ('Output device: ' + d.deviceId);
+          sinksSel.appendChild(opt);
+        });
+        if (outs.length === 0) {
+          setError('No audio output devices found. (Chrome required; served over HTTPS/localhost.)');
+          return;
+        }
+        sinksSel.disabled = false;
+        btnApply.disabled = false;
+        setStatus('Choose a device (look for “NDI Audio”).');
+      } catch (e) {
+        setError('Failed to enumerate devices: ' + e.message);
+      }
+    });
+
+    btnApply.addEventListener('click', async () => {
+      setError('');
+      if (!supportsSinkId()) {
+        setError('setSinkId() unsupported in this browser.');
+        return;
+      }
+      const id = sinksSel.value;
+      if (!id) { setError('Pick a device first.'); return; }
+      try {
+        await ensureAudioGraph();
+        await outEl.setSinkId(id);
+        setStatus('Output routed to: ' + (sinksSel.selectedOptions[0]?.textContent || id));
+      } catch (e) {
+        setError('setSinkId failed: ' + e.message);
+      }
+    });
+
+    // Surface basic capability info
+    if (!supportsSinkId()) {
+      setStatus('Note: This browser does not support setSinkId(). Use Chrome/Edge desktop.');
+    } else {
+      setStatus('Ready. Start the tone, then pick “NDI Audio.”');
+    }
+  })();
+  </script>
+</body>
+</html>
