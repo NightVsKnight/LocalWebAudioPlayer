@@ -36,15 +36,18 @@ Rate your favorite tracks with a 5-star rating system to quickly identify music 
 
 ### How It Works
 - Each track in the playlist shows 5 star icons (★) next to its duration
+- **The currently playing track also displays stars in the "Now Playing" section** between the seek bar and time display
 - Click any star to rate the track from 1 to 5 stars
 - Click the same star again to clear the rating
 - Filled gold stars (★) indicate the current rating
 - Empty gray stars indicate unrated positions
 - Ratings are stored locally in IndexedDB and persist across sessions
 - Ratings are tied to the track's file path, so they remain even if you rescan the folder
+- Rating the current track in "Now Playing" updates both displays simultaneously
 
 ### Use Cases
 - Quickly spot your favorite tracks in large folders
+- **Rate tracks on-the-fly while listening** without scrolling through the playlist
 - Build a personal preference database for future features (sorting, filtering, playlists)
 - Track which songs resonate with you over time
 
@@ -105,6 +108,10 @@ Click **⚙️ Settings** → **Disable** to stop exporting. You can re-enable i
 - **Track Ratings:** Rate several tracks with different star counts (1-5 stars), reload the page, rescan the same folder, and verify all ratings persist correctly.
 - **Track Ratings:** Verify clicking a star does not trigger track playback (only plays when clicking the track name/number/duration).
 - **Track Ratings:** Hover over stars and verify they highlight with gold color and scale up slightly.
+- **Track Ratings (Now Playing):** Start playback and verify the "Now Playing" section shows 5 star icons between the seek bar and time display.
+- **Track Ratings (Now Playing):** Click the fourth star in "Now Playing" and verify both the "Now Playing" stars and the playlist item stars update simultaneously.
+- **Track Ratings (Now Playing):** Rate a track from "Now Playing", skip to a different track, then return to the first track and verify the rating persists.
+- **Track Ratings (Now Playing):** Verify the "Now Playing" rating updates automatically when using Next/Previous buttons or clicking a different track.
 - Start playback, open the **History** overlay, and confirm a new row appears with the correct start time, track info, and listened duration.
 - Skip a track before it reaches the halfway point and verify the history entry is labeled **Skipped** with a percent heard below 50%.
 - Play a track through without rewinding and confirm the % heard badge lands on a blue **100%** (±1%).
