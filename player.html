@@ -158,7 +158,7 @@
   }
   button.ctrl:hover { border-color: rgba(93, 251, 255, 0.45); box-shadow: 0 0 26px rgba(93, 251, 255, 0.45); transform: translateY(-1px); }
   .seek {
-    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; margin-top: 4px;
+    display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-top: 4px;
   }
   input[type="range"] {
     width: 100%; accent-color: var(--accent);
@@ -249,6 +249,19 @@
   .viz-status { font-size: 12px; color: var(--muted); }
   
   .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
+  
+  .now-rating {
+    display: flex; gap: 3px; font-size: 16px; padding: 0 8px;
+    border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  }
+  .now-rating .star {
+    cursor: pointer; color: rgba(255, 255, 255, 0.2); transition: color .15s ease, transform .15s ease;
+    user-select: none;
+  }
+  .now-rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
+  .now-rating .star:hover { color: #ffd700; transform: scale(1.15); }
+  .now-rating:not(:hover) .star.filled:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
+
 
   .list {
     padding: 12px; overflow: auto; max-height: 610px;
@@ -532,6 +545,13 @@
 
         <div class="seek">
           <input id="seek" type="range" min="0" max="1000" value="0" />
+          <div class="now-rating" id="nowRating" title="Rate this track">
+            <span class="star" data-rating="1">★</span>
+            <span class="star" data-rating="2">★</span>
+            <span class="star" data-rating="3">★</span>
+            <span class="star" data-rating="4">★</span>
+            <span class="star" data-rating="5">★</span>
+          </div>
           <div class="time"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
         </div>
 
@@ -668,6 +688,7 @@
   const vizModeSel  = document.getElementById('vizMode');
   const vizCanvas   = document.getElementById('vizCanvas');
   const vizStatusEl = document.getElementById('vizStatus');
+  const nowRatingEl = document.getElementById('nowRating');
   
   // Settings modal elements
   const settingsBtn = document.getElementById('settingsBtn');
@@ -2533,6 +2554,43 @@
     });
   }
 
+  function updateNowPlayingRating(rating) {
+    if (!nowRatingEl) return;
+    const stars = nowRatingEl.querySelectorAll('.star');
+    stars.forEach((star, i) => {
+      if (i < rating) {
+        star.classList.add('filled');
+      } else {
+        star.classList.remove('filled');
+      }
+    });
+  }
+
+  function setupNowPlayingRating() {
+    if (!nowRatingEl) return;
+    const stars = nowRatingEl.querySelectorAll('.star');
+    stars.forEach((star, index) => {
+      star.addEventListener('click', () => {
+        if (current < 0 || !tracks[current]) return;
+        const track = tracks[current];
+        const key = trackKey(track);
+        const currentRating = trackRatings.get(key) || 0;
+        const newRating = (currentRating === index + 1) ? 0 : index + 1;
+        
+        setTrackRating(key, newRating).then(() => {
+          updateNowPlayingRating(newRating);
+          // Also update the rating in the track list if visible
+          const ref = trackRefs.get(current);
+          if (ref && ref.row) {
+            updateTrackRatingDisplay(ref.row, newRating);
+          }
+        }).catch(err => {
+          console.error('Failed setting now-playing track rating', err);
+        });
+      });
+    });
+  }
+
   function primeDuration(index, durEl) {
     const track = tracks[index];
     const tmp = new Audio();
@@ -2620,6 +2678,8 @@
     if (nowTitleEl) nowTitleEl.textContent = tr.displayName;
     if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = fmtTrackNumber(current);
+    const key = trackKey(tr);
+    updateNowPlayingRating(trackRatings.get(key) || 0);
     highlightActive();
     updateMediaSessionMetadata(tr);
     putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
@@ -2705,6 +2765,7 @@
   loadAllRatings().catch(err => {
     console.error('Failed loading track ratings', err);
   });
+  setupNowPlayingRating();
 
   if (historyToggleBtn) {
     historyToggleBtn.addEventListener('click', () => {
