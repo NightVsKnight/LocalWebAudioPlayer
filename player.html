@@ -279,13 +279,21 @@
   .now-rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
   .now-rating .star.hover-fill { color: #ffd700; }
   .now-rating .star:hover { transform: scale(1.15); }
+  
+  .now-play-count {
+    display: flex; align-items: center; gap: 4px; padding: 0 8px;
+    font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
+    border-left: 1px solid var(--border);
+  }
+  .now-play-count .count-icon { opacity: 0.6; font-size: 12px; }
+  .now-play-count .count-value { font-weight: 600; }
 
   .list {
     padding: 12px; overflow: auto; max-height: 610px;
     background: linear-gradient(180deg, rgba(8, 14, 36, 0.55), rgba(8, 14, 36, 0.2));
   }
   .item {
-    display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
+    display: grid; grid-template-columns: auto 1fr auto auto auto; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 12px; cursor: pointer; user-select: none;
     transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
   }
@@ -313,6 +321,12 @@
     text-align: right;
     justify-self: end;
   }
+  .play-count { 
+    color: var(--muted); font-size: 12px; text-align: right; 
+    min-width: 3ch; font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+  }
+  .play-count:not(:empty)::before { content: '▶ '; opacity: 0.6; }
   .footer-actions { display: flex; align-items: center; gap: 12px; }
   .history-btn {
     appearance: none; border: 1px solid var(--border); border-radius: 10px;
@@ -581,6 +595,10 @@
             <span class="star" data-rating="4">★</span>
             <span class="star" data-rating="5">★</span>
           </div>
+          <div class="now-play-count" id="nowPlayCount" title="Play count">
+            <span class="count-icon">▶</span>
+            <span class="count-value" id="nowPlayCountValue">—</span>
+          </div>
         </div>
 
         <div class="volume-panel" aria-label="Volume panel">
@@ -698,6 +716,7 @@
   const nowTitleEl  = document.getElementById('nowTitle');
   const nowArtistEl = document.getElementById('nowArtist');
   const nowTrackNumberEl = document.getElementById('nowTrackNumber');
+  const nowPlayCountEl = document.getElementById('nowPlayCountValue');
   const countEl     = document.getElementById('count');
 
   const prevBtn     = document.getElementById('prevBtn');
@@ -731,6 +750,7 @@
   const STORE_NAME = 'handles';
   const HISTORY_STORE = 'play-history';
   const RATINGS_STORE = 'track-ratings';
+  const PLAY_COUNTS_STORE = 'play-counts';
   const HISTORY_INDEX = 'by-started-at';
   const LAST_KEY = 'last-folder';
   const SHUFFLE_KEY = 'shuffle-enabled';
@@ -743,6 +763,8 @@
   const TEXT_FILE_ENABLED_KEY = 'text-file-enabled';
   const HISTORY_RENDER_LIMIT = 200;
   const HISTORY_MAX_ENTRIES = 500;
+  // Play count threshold: A track is counted as "played" if at least 50% of its duration is heard.
+  // This prevents accidental skips from inflating counts while still capturing genuine listens.
   const SKIP_THRESHOLD = 0.5;
   const REWIND_RATIO_THRESHOLD = 1.005;
   const HEARD_LOW_RATIO_THRESHOLD = 0.995;
@@ -753,13 +775,14 @@
   const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
   const HISTORY_TIME_CACHE = new Map();
   let trackRatings = new Map();
+  let trackPlayCounts = new Map();
 
   const getHandleDb = () => {
     if (!('indexedDB' in window)) return null;
     if (!handleDbPromise) {
       handleDbPromise = new Promise((resolve, reject) => {
-        // Version 3: Added RATINGS_STORE for track ratings
-        const req = indexedDB.open(DB_NAME, 3);
+        // Version 4: Added PLAY_COUNTS_STORE for tracking play counts
+        const req = indexedDB.open(DB_NAME, 4);
         req.onerror = () => reject(req.error);
         req.onupgradeneeded = () => {
           const db = req.result;
@@ -770,6 +793,9 @@
           }
           if (!db.objectStoreNames.contains(RATINGS_STORE)) {
             db.createObjectStore(RATINGS_STORE);
+          }
+          if (!db.objectStoreNames.contains(PLAY_COUNTS_STORE)) {
+            db.createObjectStore(PLAY_COUNTS_STORE);
           }
         };
         req.onsuccess = () => resolve(req.result);
@@ -838,6 +864,51 @@
         const cursor = event.target.result;
         if (cursor) {
           trackRatings.set(cursor.key, cursor.value);
+          cursor.continue();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const getPlayCount = async (trackKey) => {
+    const db = await getHandleDb();
+    if (!db) return 0;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(PLAY_COUNTS_STORE, 'readonly');
+      const req = tx.objectStore(PLAY_COUNTS_STORE).get(trackKey);
+      req.onsuccess = () => resolve(req.result ?? 0);
+      req.onerror = () => reject(req.error);
+    });
+  };
+
+  const incrementPlayCount = async (trackKey) => {
+    const db = await getHandleDb();
+    if (!db) return 0;
+    const currentCount = await getPlayCount(trackKey);
+    const newCount = currentCount + 1;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PLAY_COUNTS_STORE, 'readwrite');
+      tx.objectStore(PLAY_COUNTS_STORE).put(newCount, trackKey);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    trackPlayCounts.set(trackKey, newCount);
+    return newCount;
+  };
+
+  const loadAllPlayCounts = async () => {
+    const db = await getHandleDb();
+    if (!db) return;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(PLAY_COUNTS_STORE, 'readonly');
+      const store = tx.objectStore(PLAY_COUNTS_STORE);
+      const req = store.openCursor();
+      req.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          trackPlayCounts.set(cursor.key, cursor.value);
           cursor.continue();
         }
       };
@@ -2142,6 +2213,23 @@
     addHistoryEntry(entry).catch(err => {
       console.error('Failed recording play history', err);
     });
+    // Increment play count if track was played to completion (≥50% heard)
+    // This definition balances genuine listens vs. accidental skips.
+    if (percentPlayed !== null && percentPlayed >= SKIP_THRESHOLD) {
+      incrementPlayCount(entry.trackKey).then(newCount => {
+        // Update the UI for the current track if it's still in the list
+        const trackIndex = tracks.findIndex(t => trackKey(t) === entry.trackKey);
+        if (trackIndex >= 0) {
+          updateTrackPlayCountDisplay(trackIndex, newCount);
+          // Also update Now Playing if this track is currently loaded (even if paused)
+          if (trackIndex === current) {
+            updateNowPlayingPlayCount(newCount);
+          }
+        }
+      }).catch(err => {
+        console.error('Failed incrementing play count', err);
+      });
+    }
   };
 
   const readAnnouncePreference = () => {
@@ -2688,11 +2776,17 @@
       ratingEl.appendChild(star);
     }
 
+    const playCountEl = document.createElement('div');
+    playCountEl.className = 'play-count';
+    const currentPlayCount = trackPlayCounts.get(key) || 0;
+    playCountEl.textContent = currentPlayCount > 0 ? String(currentPlayCount) : '';
+    playCountEl.title = currentPlayCount > 0 ? `Played ${currentPlayCount} time${currentPlayCount === 1 ? '' : 's'}` : '';
+
     const durEl = document.createElement('div');
     durEl.className = 'dur';
     durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
 
-    row.append(icon, nameEl, durEl, ratingEl);
+    row.append(icon, nameEl, durEl, ratingEl, playCountEl);
     row.addEventListener('click', (e) => {
       if (e.target.closest('.rating')) return;
       playIndex(index, {autoplay:true, skipReason:'manual'});
@@ -2704,12 +2798,19 @@
       }
     });
 
-    trackRefs.set(index, { row, durEl, ancestors });
+    trackRefs.set(index, { row, durEl, playCountEl, ancestors });
     if (!isFinite(track.duration)) {
       primeDuration(index, durEl);
     }
 
     return row;
+  }
+
+  function updateTrackPlayCountDisplay(index, count) {
+    const ref = trackRefs.get(index);
+    if (!ref || !ref.playCountEl) return;
+    ref.playCountEl.textContent = count > 0 ? String(count) : '';
+    ref.playCountEl.title = count > 0 ? `Played ${count} time${count === 1 ? '' : 's'}` : '';
   }
 
   function updateTrackRatingDisplay(row, rating) {
@@ -2733,6 +2834,15 @@
         star.classList.remove('filled');
       }
     });
+  }
+
+  function updateNowPlayingPlayCount(count) {
+    if (!nowPlayCountEl) return;
+    nowPlayCountEl.textContent = count > 0 ? String(count) : '—';
+    const parent = nowPlayCountEl.parentElement;
+    if (parent) {
+      parent.title = count > 0 ? `Played ${count} time${count === 1 ? '' : 's'}` : 'Not played yet';
+    }
   }
 
   function setupNowPlayingRating() {
@@ -2874,6 +2984,7 @@
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = fmtTrackNumber(current);
     const key = trackKey(tr);
     updateNowPlayingRating(trackRatings.get(key) || 0);
+    updateNowPlayingPlayCount(trackPlayCounts.get(key) || 0);
     highlightActive();
     updateMediaSessionMetadata(tr);
     putStoreValue(LAST_TRACK_KEY, trackKey(tr)).catch(err => {
@@ -2965,6 +3076,9 @@
   loadHistoryEntries();
   loadAllRatings().catch(err => {
     console.error('Failed loading track ratings', err);
+  });
+  loadAllPlayCounts().catch(err => {
+    console.error('Failed loading play counts', err);
   });
   setupNowPlayingRating();
 
