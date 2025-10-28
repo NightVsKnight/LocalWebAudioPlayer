@@ -248,7 +248,7 @@
   }
   .viz-status { font-size: 12px; color: var(--muted); }
   
-  .time { color: var(--muted); min-width: 108px; text-align: right; font-variant-numeric: tabular-nums; }
+  .time { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   
   .now-rating {
     display: flex; gap: 3px; font-size: 16px; padding: 0 8px;
@@ -260,7 +260,7 @@
   }
   .now-rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
   .now-rating .star:hover { color: #ffd700; transform: scale(1.15); }
-  .now-rating:not(:hover) .star.filled:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
+  .now-rating .star:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
 
 
   .list {
@@ -283,6 +283,7 @@
   }
   .rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
   .rating .star:hover { color: #ffd700; transform: scale(1.15); }
+  .rating .star:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
   .rating:not(:hover) .star.filled:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
   .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
   .footer-actions { display: flex; align-items: center; gap: 12px; }
@@ -2512,6 +2513,10 @@
         const newRating = (currentRating === i) ? 0 : i;
         setTrackRating(key, newRating).then(() => {
           updateTrackRatingDisplay(row, newRating);
+          // Update Now Playing if this is the current track
+          if (index === current) {
+            updateNowPlayingRating(newRating);
+          }
         }).catch(err => {
           console.error('Failed setting track rating', err);
         });
