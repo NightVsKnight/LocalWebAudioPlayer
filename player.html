@@ -157,6 +157,11 @@
     outline: 2px solid color-mix(in oklab, var(--accent) 70%, transparent); box-shadow: 0 0 24px rgba(93, 251, 255, 0.35);
   }
   button.ctrl:hover { border-color: rgba(93, 251, 255, 0.45); box-shadow: 0 0 26px rgba(93, 251, 255, 0.45); transform: translateY(-1px); }
+  button.ctrl:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
   .seek {
     display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-top: 4px;
   }
@@ -267,7 +272,6 @@
   .now-rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
   .now-rating .star.hover-fill { color: #ffd700; }
   .now-rating .star:hover { transform: scale(1.15); }
-
 
   .list {
     padding: 12px; overflow: auto; max-height: 610px;
@@ -950,6 +954,7 @@
   const loadHistoryEntries = async () => {
     try {
       historyEntries = await fetchRecentHistory(HISTORY_RENDER_LIMIT);
+      rebuildBackStackFromHistory();
       requestHistoryRender();
     } catch (err) {
       console.error('Failed loading playback history', err);
@@ -1004,6 +1009,103 @@
   let liveHistoryEntry = null;
   let historyRenderScheduled = false;
   let activeSession = null;
+  const playbackBackStack = [];
+  let suppressBackStackPush = false;
+  // Back stack tracks prior playback history. Initial population is capped by the render set,
+  // but the higher limit keeps room for additional runtime entries as the session continues.
+  const BACK_STACK_LIMIT = HISTORY_MAX_ENTRIES;
+
+  const trackIndexFromKey = (key) => {
+    if (!key || !tracks.length) return -1;
+    return tracks.findIndex(track => trackKey(track) === key);
+  };
+
+  const peekBackStackEntry = ({ allowUnresolved = false } = {}) => {
+    const hasTracks = tracks.length > 0;
+    for (let i = playbackBackStack.length - 1; i >= 0; i--) {
+      const entry = playbackBackStack[i];
+      if (!entry || !entry.trackKey) {
+        playbackBackStack.splice(i, 1);
+        continue;
+      }
+      if (!hasTracks) {
+        if (allowUnresolved) {
+          return { entry, index: -1, stackIndex: i };
+        }
+        return null;
+      }
+      const idx = trackIndexFromKey(entry.trackKey);
+      if (idx >= 0) {
+        return { entry, index: idx, stackIndex: i };
+      }
+      playbackBackStack.splice(i, 1);
+    }
+    return null;
+  };
+
+  const updatePrevButtonState = () => {
+    if (!prevBtn) return;
+    const candidate = peekBackStackEntry({ allowUnresolved: !tracks.length });
+    const hasHistory = Boolean(candidate);
+    prevBtn.disabled = !hasHistory;
+  };
+
+  const pushBackStackEntry = (entry) => {
+    if (!entry || !entry.trackKey) return;
+    playbackBackStack.push({
+      trackKey: entry.trackKey,
+      startedAt: entry.startedAt ?? Date.now(),
+    });
+    if (playbackBackStack.length > BACK_STACK_LIMIT) {
+      playbackBackStack.shift();
+    }
+    updatePrevButtonState();
+  };
+
+  const consumeBackStackEntry = () => {
+    const candidate = peekBackStackEntry();
+    if (!candidate) return null;
+    playbackBackStack.splice(candidate.stackIndex, 1);
+    updatePrevButtonState();
+    return candidate;
+  };
+
+  const clearPlaybackBackStack = () => {
+    playbackBackStack.length = 0;
+    updatePrevButtonState();
+  };
+
+  const removeBackStackEntry = (entry) => {
+    if (!entry || !entry.trackKey) return;
+    const { trackKey: key, startedAt } = entry;
+    for (let i = playbackBackStack.length - 1; i >= 0; i--) {
+      const candidate = playbackBackStack[i];
+      if (!candidate) continue;
+      if (candidate.trackKey !== key) continue;
+      if (typeof startedAt === 'number' && candidate.startedAt !== startedAt) continue;
+      playbackBackStack.splice(i, 1);
+    }
+    updatePrevButtonState();
+  };
+
+  const rebuildBackStackFromHistory = () => {
+    playbackBackStack.length = 0;
+    if (!Array.isArray(historyEntries) || !historyEntries.length) {
+      updatePrevButtonState();
+      return;
+    }
+    const maxBacklog = Math.min(historyEntries.length, BACK_STACK_LIMIT);
+    for (let i = historyEntries.length - 1; playbackBackStack.length < maxBacklog && i >= 0; i--) {
+      const entry = historyEntries[i];
+      if (!entry || !entry.trackKey) continue;
+      playbackBackStack.push({
+        trackKey: entry.trackKey,
+        startedAt: entry.startedAt ?? Date.now(),
+      });
+    }
+    updatePrevButtonState();
+  };
+  updatePrevButtonState();
 
   /** Media Session API support */
   const mediaSessionSupported = 'mediaSession' in navigator;
@@ -1065,10 +1167,20 @@
         }
       });
       navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (tracks.length) playIndex(prevIndex(), { autoplay: true, skipReason: 'manual' });
+        Promise.resolve(
+          playPreviousFromHistory({ autoplay: true })
+        ).catch(err => {
+          console.error('Failed handling previous track action', err);
+        });
       });
       navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (tracks.length) playIndex(nextIndex(), { autoplay: true, skipReason: 'manual' });
+        if (tracks.length) {
+          Promise.resolve(
+            playIndex(nextIndex(), { autoplay: true, skipReason: 'manual' })
+          ).catch(err => {
+            console.error('Failed handling next track action', err);
+          });
+        }
       });
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -1697,6 +1809,7 @@
           try {
             await deleteHistoryEntryById(entry.id);
             historyEntries = historyEntries.filter(item => item.id !== entry.id);
+            removeBackStackEntry(entry);
             requestHistoryRender();
           } catch (err) {
             console.error('Failed deleting history entry', err);
@@ -1973,8 +2086,11 @@
     // - Above REWIND_RATIO_THRESHOLD (100.5%) counts as a rewind because listeners replayed a portion.
     // - Between SKIP_THRESHOLD and ~100% is treated as a normal completion.
     // - Below SKIP_THRESHOLD is classified as a fast-forward/skip.
+    const isHistoryBack = reason === 'history-back';
     let finalReason = reason;
-    if (percentPlayed !== null) {
+    if (isHistoryBack) {
+      finalReason = 'rewound';
+    } else if (percentPlayed !== null) {
       if (isRewoundPercent(percentPlayed)) {
         finalReason = 'rewound';
       } else if (percentPlayed >= SKIP_THRESHOLD) {
@@ -2002,6 +2118,9 @@
       skipped,
       reason: finalReason,
     };
+    if (!suppressBackStackPush && !isHistoryBack) {
+      pushBackStackEntry(entry);
+    }
     liveHistoryEntry = null;
     requestHistoryRender();
     activeSession = null;
@@ -2420,6 +2539,7 @@
       playIndex(targetIdx, {autoplay:false});
     }
     setFolderPath(dirHandle);
+    updatePrevButtonState();
   }
 
   if (announceBtn) {
@@ -2756,17 +2876,24 @@
     return idx;
   }
 
-  function prevIndex() {
-    if (!tracks.length) return current;
-    if (shuffle && tracks.length > 1) {
-      let idx;
-      do { idx = Math.floor(Math.random() * tracks.length); } while (idx === current);
-      return idx;
+  const playPreviousFromHistory = async ({ autoplay = true } = {}) => {
+    if (!tracks.length) return;
+    const candidate = consumeBackStackEntry();
+    if (!candidate) {
+      updatePrevButtonState();
+      return;
     }
-    let idx = current - 1;
-    if (idx < 0) idx = tracks.length - 1;
-    return idx;
-  }
+    suppressBackStackPush = true;
+    try {
+      await playIndex(candidate.index, { autoplay, skipReason: 'history-back' });
+    } catch (err) {
+      playbackBackStack.splice(candidate.stackIndex, 0, candidate.entry);
+      updatePrevButtonState();
+      throw err;
+    } finally {
+      suppressBackStackPush = false;
+    }
+  };
 
   const loadPreferences = async () => {
     try {
@@ -2831,6 +2958,7 @@
       try {
         await clearHistoryStore();
         historyEntries = [];
+        clearPlaybackBackStack();
         requestHistoryRender();
       } catch (err) {
         console.error('Failed clearing history entries', err);
@@ -2906,7 +3034,11 @@
   });
 
   nextBtn.addEventListener('click', () => playIndex(nextIndex(), {autoplay:true, skipReason:'manual'}));
-  prevBtn.addEventListener('click', () => playIndex(prevIndex(), {autoplay:true, skipReason:'manual'}));
+  prevBtn.addEventListener('click', () => {
+    playPreviousFromHistory({ autoplay: true }).catch(err => {
+      console.error('Failed loading previous track from history', err);
+    });
+  });
 
   shuffleBtn.addEventListener('click', () => {
     shuffle = !shuffle;
@@ -3037,7 +3169,7 @@
       if (e.metaKey || e.ctrlKey) {
         // Cmd/Ctrl + Left → previous track
         e.preventDefault();
-        prevBtn.click();
+        if (!prevBtn.disabled) prevBtn.click();
       } else {
         // Plain Left → seek backward 5 seconds
         // Only prevent default if not focused on a horizontally scrollable playlist
