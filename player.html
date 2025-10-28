@@ -259,8 +259,8 @@
     user-select: none;
   }
   .now-rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
-  .now-rating .star:hover { color: #ffd700; transform: scale(1.15); }
-  .now-rating .star:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
+  .now-rating .star.hover-fill { color: #ffd700; }
+  .now-rating .star:hover { transform: scale(1.15); }
 
 
   .list {
@@ -282,9 +282,8 @@
     user-select: none;
   }
   .rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
-  .rating .star:hover { color: #ffd700; transform: scale(1.15); }
-  .rating .star:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
-  .rating:not(:hover) .star.filled:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
+  .rating .star.hover-fill { color: #ffd700; }
+  .rating .star:hover { transform: scale(1.15); }
   .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
   .footer-actions { display: flex; align-items: center; gap: 12px; }
   .history-btn {
@@ -2521,6 +2520,18 @@
           console.error('Failed setting track rating', err);
         });
       });
+      star.addEventListener('mouseenter', () => {
+        const stars = ratingEl.querySelectorAll('.star');
+        stars.forEach((s, idx) => {
+          if (idx < i) {
+            s.classList.add('hover-fill');
+          }
+        });
+      });
+      star.addEventListener('mouseleave', () => {
+        const stars = ratingEl.querySelectorAll('.star');
+        stars.forEach(s => s.classList.remove('hover-fill'));
+      });
       ratingEl.appendChild(star);
     }
 
@@ -2592,6 +2603,16 @@
         }).catch(err => {
           console.error('Failed setting now-playing track rating', err);
         });
+      });
+      star.addEventListener('mouseenter', () => {
+        stars.forEach((s, idx) => {
+          if (idx <= index) {
+            s.classList.add('hover-fill');
+          }
+        });
+      });
+      star.addEventListener('mouseleave', () => {
+        stars.forEach(s => s.classList.remove('hover-fill'));
       });
     });
   }
