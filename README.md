@@ -18,6 +18,7 @@ I created this because:
 - Integrates with OS media controls (Bluetooth headsets, keyboard media keys, system tray) via the Media Session API.
 - Logs every listening session with timestamps, duration heard, and automatic skip detection (<50% heard) that you can review from the History overlay (open it with the footer History button).
 - Tracks actual listening time (pauses excluded) so the history shows how much you truly heard; the % column turns yellow when you hear less than 100%, blue right at 100%, and green when rewinds push you beyond the original duration. When the filename includes a YouTube ID, the History overlay links straight back to the original video for quick reference.
+- **Track Ratings:** Rate each track with a 5-star system. Ratings are stored in IndexedDB and persist across sessions. Click any star to set a rating (1-5 stars), or click the current rating again to clear it.
 - **OBS Metadata Export:** Export "now playing" track metadata to a text file for use in OBS overlays and streaming software (Chromium browsers only).
 
 ## Playback History
@@ -28,6 +29,33 @@ The player now tracks each time you start or stop a song so you can understand h
 - Sessions that end before 50% completion are marked as **Skipped**, letting you instantly spot tracks you abandon.
 - History is stored locally in IndexedDB and survives page reloads; the most recent 500 sessions are retained automatically.
 - Open the **History** overlay (click the footer History button) to inspect your listening log. Each row shows when the track started, the path/artist, how long you listened, and whether it completed, was skipped, or manually stopped.
+
+## Track Ratings
+
+Rate your favorite tracks with a 5-star rating system to quickly identify music you love.
+
+### How It Works
+- Each track in the playlist shows 5 star icons (★) next to its duration
+- **The currently playing track also displays stars in the "Now Playing" section** between the seek bar and time display
+- Click any star to rate the track from 1 to 5 stars
+- Click the same star again to clear the rating
+- Filled gold stars (★) indicate the current rating
+- Empty gray stars indicate unrated positions
+- Ratings are stored locally in IndexedDB and persist across sessions
+- Ratings are tied to the track's file path, so they remain even if you rescan the folder
+- Rating the current track in "Now Playing" updates both displays simultaneously
+
+### Use Cases
+- Quickly spot your favorite tracks in large folders
+- **Rate tracks on-the-fly while listening** without scrolling through the playlist
+- Build a personal preference database for future features (sorting, filtering, playlists)
+- Track which songs resonate with you over time
+
+### Data Storage
+- Ratings are stored in your browser's IndexedDB (not in MP3 ID3 tags)
+- No external services or cloud storage involved
+- Ratings remain private to your browser and device
+- To export ratings to ID3 tags, a future offline script may be provided
 
 ## OBS Metadata Export
 
@@ -74,6 +102,16 @@ Click **⚙️ Settings** → **Disable** to stop exporting. You can re-enable i
 ## Manual Testing
 - Toggle Shuffle or Loop, reload `player.html`, and confirm the controls restore to their previous selections (initial defaults: Shuffle On, Loop All).
 - Start a track, reload `player.html`, and verify the same track is selected; if you remove or rename it, the player should open with the first track (or a random one if Shuffle is enabled).
+- **Track Ratings:** Load a music folder and verify each track displays 5 gray star icons (★) next to the duration.
+- **Track Ratings:** Click the third star on a track and verify the first three stars become filled with gold color and glow effect.
+- **Track Ratings:** Click the third star again (the current rating) and verify all stars become gray (rating cleared).
+- **Track Ratings:** Rate several tracks with different star counts (1-5 stars), reload the page, rescan the same folder, and verify all ratings persist correctly.
+- **Track Ratings:** Verify clicking a star does not trigger track playback (only plays when clicking the track name/number/duration).
+- **Track Ratings:** Hover over stars and verify they highlight with gold color and scale up slightly.
+- **Track Ratings (Now Playing):** Start playback and verify the "Now Playing" section shows 5 star icons between the seek bar and time display.
+- **Track Ratings (Now Playing):** Click the fourth star in "Now Playing" and verify both the "Now Playing" stars and the playlist item stars update simultaneously.
+- **Track Ratings (Now Playing):** Rate a track from "Now Playing", skip to a different track, then return to the first track and verify the rating persists.
+- **Track Ratings (Now Playing):** Verify the "Now Playing" rating updates automatically when using Next/Previous buttons or clicking a different track.
 - Start playback, open the **History** overlay, and confirm a new row appears with the correct start time, track info, and listened duration.
 - Skip a track before it reaches the halfway point and verify the history entry is labeled **Skipped** with a percent heard below 50%.
 - Play a track through without rewinding and confirm the % heard badge lands on a blue **100%** (±1%).
