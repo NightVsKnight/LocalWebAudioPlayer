@@ -16,6 +16,7 @@
     --glow: rgba(93, 251, 255, 0.45);
     --ctrl-min: 120px;
     --playlist-width: clamp(420px, 42%, 600px);
+    --playcount-col: 3.6ch;
   }
   * { box-sizing: border-box; }
   body {
@@ -170,7 +171,7 @@
     pointer-events: none;
   }
   .seek {
-    display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; margin-top: 4px;
+    display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 10px; margin-top: 4px;
   }
   input[type="range"] {
     width: 100%; accent-color: var(--accent);
@@ -281,9 +282,11 @@
   .now-rating .star:hover { transform: scale(1.15); }
   
   .now-play-count {
-    display: flex; align-items: center; gap: 4px; padding: 0 8px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 3px; padding: 0 6px;
     font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
     border-left: 1px solid var(--border);
+    min-width: var(--playcount-col);
+    justify-self: center;
   }
   .now-play-count .count-icon { opacity: 0.6; font-size: 12px; }
   .now-play-count .count-value { font-weight: 600; }
@@ -301,6 +304,20 @@
   .item.active { background: rgba(93, 251, 255, 0.16); outline: 1px solid rgba(93, 251, 255, 0.45); box-shadow: 0 0 24px rgba(93, 251, 255, 0.25); }
   .num { color: var(--muted); width: 2ch; text-align: right; text-shadow: 0 0 6px rgba(93, 251, 255, 0.35); }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dur {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    justify-self: end;
+  }
+  .play-count { 
+    color: var(--muted); font-size: 12px; text-align: center; 
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+    width: var(--playcount-col);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .play-count:not(:empty)::before { content: '▶'; opacity: 0.6; margin-right: 2px; font-size: 11px; }
   .rating {
     display: flex;
     gap: 2px;
@@ -315,19 +332,9 @@
   .rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
   .rating .star.hover-fill { color: #ffd700; }
   .rating .star:hover { transform: scale(1.15); }
-  .dur {
-    color: var(--muted);
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-    justify-self: end;
-  }
-  .play-count { 
-    color: var(--muted); font-size: 12px; text-align: right; 
-    min-width: 3ch; font-variant-numeric: tabular-nums;
-    opacity: 0.8;
-  }
-  .play-count:not(:empty)::before { content: '▶ '; opacity: 0.6; }
+
   .footer-actions { display: flex; align-items: center; gap: 12px; }
+
   .history-btn {
     appearance: none; border: 1px solid var(--border); border-radius: 10px;
     background: rgba(9, 15, 33, 0.78); color: var(--text); font-weight: 600;
@@ -337,6 +344,7 @@
     border-color: rgba(93, 251, 255, 0.55);
     box-shadow: 0 0 20px rgba(93, 251, 255, 0.25);
   }
+  
   .history-overlay {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
     padding: 32px; background: rgba(4, 7, 18, 0.82); backdrop-filter: blur(8px);
@@ -588,16 +596,16 @@
         <div class="seek">
           <input id="seek" type="range" min="0" max="1000" value="0" />
           <div class="time"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+          <div class="now-play-count" id="nowPlayCount" title="Play count">
+            <span class="count-icon">▶</span>
+            <span class="count-value" id="nowPlayCountValue">—</span>
+          </div>
           <div class="now-rating" id="nowRating" title="Rate this track">
             <span class="star" data-rating="1">★</span>
             <span class="star" data-rating="2">★</span>
             <span class="star" data-rating="3">★</span>
             <span class="star" data-rating="4">★</span>
             <span class="star" data-rating="5">★</span>
-          </div>
-          <div class="now-play-count" id="nowPlayCount" title="Play count">
-            <span class="count-icon">▶</span>
-            <span class="count-value" id="nowPlayCountValue">—</span>
           </div>
         </div>
 
@@ -654,6 +662,7 @@
                 <th scope="col">Artist • Path</th>
                 <th scope="col">Listened</th>
                 <th scope="col">% Heard</th>
+                <th scope="col">Plays</th>
                 <th scope="col">Status</th>
                 <th scope="col" aria-label="Actions">Actions</th>
               </tr>
@@ -781,6 +790,8 @@
     if (!('indexedDB' in window)) return null;
     if (!handleDbPromise) {
       handleDbPromise = new Promise((resolve, reject) => {
+        // Version 2: Added HISTORY_STORE for playback session tracking
+        // Version 3: Added RATINGS_STORE for track ratings
         // Version 4: Added PLAY_COUNTS_STORE for tracking play counts
         const req = indexedDB.open(DB_NAME, 4);
         req.onerror = () => reject(req.error);
@@ -1862,6 +1873,13 @@
       percentCell.appendChild(percentSpan);
       row.appendChild(percentCell);
 
+      const playCountCell = document.createElement('td');
+      playCountCell.className = 'time-cell';
+      const currentPlayCount = trackPlayCounts.get(entry.trackKey) || 0;
+      playCountCell.textContent = currentPlayCount > 0 ? String(currentPlayCount) : '—';
+      playCountCell.title = currentPlayCount > 0 ? `Played ${currentPlayCount} time${currentPlayCount === 1 ? '' : 's'}` : 'Not counted as played yet';
+      row.appendChild(playCountCell);
+
       const statusCell = document.createElement('td');
       statusCell.className = 'status-cell';
       let statusInfo;
@@ -2786,7 +2804,7 @@
     durEl.className = 'dur';
     durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
 
-    row.append(icon, nameEl, durEl, ratingEl, playCountEl);
+    row.append(icon, nameEl, durEl, playCountEl, ratingEl);
     row.addEventListener('click', (e) => {
       if (e.target.closest('.rating')) return;
       playIndex(index, {autoplay:true, skipReason:'manual'});
