@@ -1,229 +1,361 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Per-tab Output → NDI Audio (setSinkId demo)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8">
+  <title>Route this page’s audio to “NDI Audio” (setSinkId only)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    body { max-width: 760px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { font-size: 1.4rem; margin-bottom: .5rem; }
-    .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: .5rem 0; }
+    :root { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    body { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; margin-bottom: .25rem; }
+    .row { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; margin:.5rem 0; }
     button, select, input[type="range"] { font-size: 1rem; padding: .5rem .75rem; }
-    .note { color: #555; font-size: .95rem; }
-    .err { color: #b00020; }
-    code { background: #f4f4f4; padding: .15rem .3rem; border-radius: 4px; }
+    .note { color:#555; }
+    .err  { color:#b00020; white-space: pre-wrap; }
+    details { margin-top: 1rem; }
+    audio { width: 100%; }
+    .meter { width: 160px; height: 12px; background: #eee; border-radius: 6px; overflow: hidden; }
+    .bar   { height: 100%; width: 0%; background: #4a90e2; transition: width .05s linear; }
+    .warn  { padding: .5rem .75rem; background: #fff7e6; border: 1px solid #ffd27a; border-radius: 6px; }
   </style>
 </head>
 <body>
   <h1>Route this page’s audio to a specific output (e.g., “NDI Audio”)</h1>
-
   <p class="note">
-    Works in Chromium browsers (Chrome/Edge/Brave) on desktop when served over
-    <b>HTTPS</b> or <code>http://localhost</code>. Safari currently does not support <code>setSinkId()</code>.
+    Use Chromium (Chrome/Edge/Brave) on desktop over <b>HTTPS</b> or <code>http://localhost</code>.
+    Safari doesn’t support <code>setSinkId()</code>.
   </p>
 
+  <!-- Device picker -->
   <div class="row">
-    <button id="btnStart">Start test tone</button>
-    <button id="btnStop" disabled>Stop</button>
-    <label>Volume
-      <input id="gain" type="range" min="0" max="100" value="35" />
-    </label>
+    <button id="btnList">Show output devices</button>
+    <select id="sinks" disabled aria-label="Audio output devices"></select>
+    <button id="btnApply" disabled>Apply to this page</button>
+    <span id="status" class="note"></span>
   </div>
-
-  <hr/>
-
-  <h2>Pick output device</h2>
-
-  <div class="row">
-    <button id="btnPrompt">Pick with browser prompt (selectAudioOutput)</button>
-    <span class="note">Preferred: lets you pick “NDI Audio” without mic permission.</span>
-  </div>
-
-  <div class="row">
-    <button id="btnList">Show device list</button>
-    <select id="sinks" disabled></select>
-    <button id="btnApply" disabled>Apply</button>
-  </div>
-
-  <p id="status" class="note"></p>
+  <p id="banner" class="warn" style="display:none;"></p>
   <p id="error" class="err"></p>
 
-  <hr/>
+  <hr>
+
+  <!-- Test tone -->
+  <h2>Test tone</h2>
+  <div class="row">
+    <button id="btnStart">Start 440 Hz</button>
+    <button id="btnStop" disabled>Stop</button>
+    <label>Volume <input id="gain" type="range" min="0" max="100" value="35"></label>
+    <span class="meter" title="Tone level"><span id="toneVu" class="bar"></span></span>
+  </div>
+
+  <!-- File player -->
+  <h2>Play your own file</h2>
+  <div class="row">
+    <input id="file" type="file" accept="audio/*">
+  </div>
+  <audio id="player" controls></audio>
+  <div class="row">
+    <span class="meter" title="Player level"><span id="fileVu" class="bar"></span></span>
+  </div>
+
+  <!-- Hidden audio sink for WebAudio tone -->
+  <audio id="out" autoplay></audio>
 
   <details>
     <summary>Troubleshooting</summary>
     <ul>
-      <li>Serve this file via <code>http://localhost</code> (<code>python3 -m http.server 8000</code>) or HTTPS.
-      </li>
-      <li>“NDI Audio” comes from installing <b>NDI Tools</b>. Confirm it appears in macOS
-        <i>System Settings → Sound → Output</i> and in <i>Audio MIDI Setup</i>.
-      </li>
-      <li>Device labels in the dropdown may be empty until you grant a one-time
-        permission (either the prompt button below or temporarily calling <code>getUserMedia({audio:true})</code>).
-      </li>
-      <li>Safari: no <code>setSinkId</code> yet. Use Chrome/Edge for this page.
-      </li>
+      <li>If labels are blank, the page will ask for a one-time mic permission to reveal device labels.</li>
+      <li>If your chosen sink disappears (USB/BT unplug), the page will fall back to <code>default</code> and log it.</li>
+      <li>Check the Console for timestamped logs (apply attempts, retries, devicechange events, etc.).</li>
     </ul>
   </details>
 
-  <!-- Hidden audio element that we can retarget with setSinkId -->
-  <audio id="out" autoplay></audio>
-
   <script>
-  (function () {
-    const outEl = document.getElementById('out');
-    const btnStart = document.getElementById('btnStart');
-    const btnStop = document.getElementById('btnStop');
-    const gainSlider = document.getElementById('gain');
+    (function () {
+      // ---------- Logging helpers ----------
+      const ts = () => new Date().toISOString().replace('T',' ').replace('Z','');
+      const log  = (...a) => console.log(`[${ts()}]`, ...a);
+      const info = (...a) => console.info(`[${ts()}]`, ...a);
+      const warn = (...a) => console.warn(`[${ts()}]`, ...a);
+      const err  = (...a) => console.error(`[${ts()}]`, ...a);
 
-    const btnPrompt = document.getElementById('btnPrompt');
-    const btnList = document.getElementById('btnList');
-    const sinksSel = document.getElementById('sinks');
-    const btnApply = document.getElementById('btnApply');
+      // ---------- Elements ----------
+      const outEl   = document.getElementById('out');     // WebAudio tone sink
+      const player  = document.getElementById('player');  // File player sink
 
-    const statusEl = document.getElementById('status');
-    const errorEl = document.getElementById('error');
+      const btnList = document.getElementById('btnList');
+      const sinks   = document.getElementById('sinks');
+      const btnApply= document.getElementById('btnApply');
 
-    let ac, osc, gainNode, mediaDest;
+      const btnStart= document.getElementById('btnStart');
+      const btnStop = document.getElementById('btnStop');
+      const gainCtl = document.getElementById('gain');
+      const fileInp = document.getElementById('file');
 
-    function setStatus(msg) { statusEl.textContent = msg || ''; }
-    function setError(msg) { errorEl.textContent = msg || ''; }
+      const statusEl= document.getElementById('status');
+      const errorEl = document.getElementById('error');
+      const banner  = document.getElementById('banner');
+      const toneVu  = document.getElementById('toneVu');
+      const fileVu  = document.getElementById('fileVu');
 
-    function supportsSinkId() {
-      return typeof outEl.setSinkId === 'function';
-    }
+      // ---------- State ----------
+      let ac = null, osc = null, gainNode = null, dest = null, playing = false;
+      let toneAnalyser = null, fileAnalyser = null, fileCtx = null, fileSrc = null;
+      let currentSinkId = 'default';       // what we *think* we’re routing to
+      let lastDeviceList = [];             // cache of latest outputs
 
-    async function ensureAudioGraph() {
-      if (ac) return;
-      ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
-      osc = ac.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = 440;
+      const setStatus = m => { statusEl.textContent = m || ''; if (m) info('STATUS:', m); };
+      const setError  = m => { errorEl.textContent  = m || ''; if (m) err('UI ERROR:', m); };
+      const showBanner= m => { banner.textContent = m; banner.style.display = m ? '' : 'none'; if (m) warn('BANNER:', m); };
 
-      gainNode = ac.createGain();
-      gainNode.gain.value = gainSlider.value / 100;
+      const supportsSinkId = el => typeof el.setSinkId === 'function';
 
-      mediaDest = ac.createMediaStreamDestination();
-      osc.connect(gainNode).connect(mediaDest);
-      outEl.srcObject = mediaDest.stream;
-    }
+      // ---------- Audio graphs ----------
+      function buildToneGraph() {
+        if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        osc = ac.createOscillator(); osc.type = 'sine'; osc.frequency.setValueAtTime(440, ac.currentTime);
+        gainNode = ac.createGain(); gainNode.gain.setValueAtTime(gainCtl.value/100, ac.currentTime);
+        dest = ac.createMediaStreamDestination();
+        toneAnalyser = ac.createAnalyser(); toneAnalyser.fftSize = 256;
 
-    btnStart.addEventListener('click', async () => {
-      try {
-        await ensureAudioGraph();
-        osc.start();
-        await ac.resume();
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        setStatus('Playing 440 Hz test tone. Route it to “NDI Audio” below.');
-      } catch (e) {
-        setError('Failed to start audio: ' + e.message);
+        osc.connect(gainNode);
+        gainNode.connect(toneAnalyser);
+        gainNode.connect(dest);
+
+        outEl.srcObject = dest.stream;
+
+        osc.addEventListener('ended', () => {
+          playing = false;
+          try { osc.disconnect(); gainNode.disconnect(); } catch {}
+          btnStart.disabled = false; btnStop.disabled = true;
+          setStatus('Tone stopped.');
+        }, { once:true });
+
+        info('Tone graph built. sampleRate=', ac.sampleRate);
       }
-    });
 
-    btnStop.addEventListener('click', () => {
-      try {
-        if (osc) { osc.stop(); }
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        setStatus('Stopped.');
-      } catch (e) {
-        setError('Failed to stop: ' + e.message);
+      function startMeters() {
+        (function loopTone() {
+          if (toneAnalyser) {
+            const data = new Uint8Array(toneAnalyser.frequencyBinCount);
+            toneAnalyser.getByteTimeDomainData(data);
+            let peak = 0; for (let i=0;i<data.length;i++) { const v = Math.abs(data[i]-128); if (v>peak) peak=v; }
+            toneVu.style.width = Math.min(100, (peak/128)*100) + '%';
+          }
+          requestAnimationFrame(loopTone);
+        })();
+
+        (function loopFile() {
+          if (fileAnalyser) {
+            const data = new Uint8Array(fileAnalyser.frequencyBinCount);
+            fileAnalyser.getByteTimeDomainData(data);
+            let peak = 0; for (let i=0;i<data.length;i++) { const v = Math.abs(data[i]-128); if (v>peak) peak=v; }
+            fileVu.style.width = Math.min(100, (peak/128)*100) + '%';
+          }
+          requestAnimationFrame(loopFile);
+        })();
       }
-    });
 
-    gainSlider.addEventListener('input', () => {
-      if (gainNode) gainNode.gain.value = gainSlider.value / 100;
-    });
-
-    // Preferred: browser-owned device picker (no mic permission needed).
-    btnPrompt.addEventListener('click', async () => {
-      setError('');
-      if (!navigator.mediaDevices || !navigator.mediaDevices.selectAudioOutput) {
-        setError('selectAudioOutput() not supported in this browser. Use Chrome/Edge.');
-        return;
-      }
-      try {
-        const sysDev = await navigator.mediaDevices.selectAudioOutput();
-        if (!sysDev || !sysDev.deviceId) {
-          setStatus('No device selected.');
-          return;
+      // ---------- Robust setSinkId with retry/backoff ----------
+      async function safeApplySinkToElement(el, deviceId, labelForLog, { retries = 3, delays = [50, 150, 400] } = {}) {
+        if (!supportsSinkId(el)) {
+          throw new Error('setSinkId() unsupported in this browser for element.');
         }
-        await ensureAudioGraph();
-        if (!supportsSinkId()) {
-          setError('This browser does not support setSinkId().');
-          return;
-        }
-        await outEl.setSinkId(sysDev.deviceId);
-        setStatus('Output routed to: ' + (sysDev.label || 'selected device'));
-      } catch (e) {
-        setError('selectAudioOutput failed: ' + e.message);
-      }
-    });
 
-    // Fallback: show a dropdown of audiooutput devices.
-    btnList.addEventListener('click', async () => {
-      setError('');
-      try {
-        // Try to get labels without mic; if empty, request a minimal mic permission once.
-        let devices = await navigator.mediaDevices.enumerateDevices();
-        const haveLabels = devices.some(d => d.kind === 'audiooutput' && d.label);
-        if (!haveLabels) {
-          // Ask for one-time mic permission to reveal labels (Chrome requirement).
+        // For HTMLMediaElement, pausing can help avoid AbortError during device switches
+        let wasPlaying = false;
+        try {
+          if (!el.paused && !el.ended) { wasPlaying = true; el.pause(); info(`${labelForLog}: paused before setSinkId`); }
+        } catch(e) { /* ignore if not applicable */ }
+
+        let lastErr;
+        for (let attempt = 0; attempt <= retries; attempt++) {
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(t => t.stop());
-            devices = await navigator.mediaDevices.enumerateDevices();
-          } catch (permErr) {
-            // If denied, we'll still populate IDs without labels.
+            info(`${labelForLog}: setSinkId("${deviceId}") attempt ${attempt+1}/${retries+1}`);
+            await el.setSinkId(deviceId);
+            info(`${labelForLog}: setSinkId OK → ${deviceId}`);
+            // Resume if we paused
+            if (wasPlaying) {
+              try { await el.play(); info(`${labelForLog}: resumed after setSinkId`); } catch (e) { warn(`${labelForLog}: resume failed`, e); }
+            }
+            return; // success
+          } catch (e) {
+            lastErr = e;
+            const name = (e && e.name) || 'Error';
+            const msg  = (e && e.message) || String(e);
+            warn(`${labelForLog}: setSinkId failed [${name}] ${msg}`);
+            // Known transient cases: AbortError, NotAllowedError right after device change
+            if (attempt < retries) {
+              const d = delays[Math.min(attempt, delays.length-1)];
+              info(`${labelForLog}: retrying in ${d}ms...`);
+              await new Promise(r => setTimeout(r, d));
+              continue;
+            }
           }
         }
 
+        // After exhausting retries, rethrow
+        throw lastErr || new Error('setSinkId failed after retries');
+      }
+
+      async function applySinkToPage(deviceId, deviceLabel) {
+        setError('');
+        try {
+          info('Applying sink to page:', { deviceId, deviceLabel });
+          await safeApplySinkToElement(outEl, deviceId, 'Tone sink');
+          await safeApplySinkToElement(player, deviceId, 'File player');
+
+          currentSinkId = deviceId;
+          setStatus(`Output routed to: ${deviceLabel || deviceId}`);
+          showBanner('');
+        } catch (e) {
+          const name = (e && e.name) || 'Error';
+          const msg  = (e && e.message) || String(e);
+          setError(`setSinkId failed: ${msg}`);
+          err('applySinkToPage: final failure', name, msg, e);
+        }
+      }
+
+      // ---------- Device list handling ----------
+      async function enumerateOutputs(showPromptForLabels = true) {
+        setError('');
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        const haveLabels = devices.some(d => d.kind === 'audiooutput' && d.label);
+        if (!haveLabels && showPromptForLabels) {
+          try {
+            info('Requesting one-time mic permission to reveal device labels…');
+            const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+            s.getTracks().forEach(t => t.stop());
+            devices = await navigator.mediaDevices.enumerateDevices();
+          } catch (e) {
+            warn('Mic permission denied (labels may be blank).');
+          }
+        }
         const outs = devices.filter(d => d.kind === 'audiooutput');
-        sinksSel.innerHTML = '';
+        lastDeviceList = outs;
+        info('Outputs:', outs.map(o => ({ id:o.deviceId, label:o.label })));
+        return outs;
+      }
+
+      function refreshSelect(outs, preserveSelection = true) {
+        const prev = preserveSelection ? sinks.value : null;
+        sinks.innerHTML = '';
         outs.forEach(d => {
           const opt = document.createElement('option');
           opt.value = d.deviceId;
-          opt.textContent = d.label || ('Output device: ' + d.deviceId);
-          sinksSel.appendChild(opt);
+          opt.textContent = d.label || ('Output ' + d.deviceId);
+          sinks.appendChild(opt);
         });
-        if (outs.length === 0) {
-          setError('No audio output devices found. (Chrome required; served over HTTPS/localhost.)');
-          return;
+
+        let selectedId = prev && outs.some(d => d.deviceId === prev) ? prev : (outs[0]?.deviceId || '');
+        if (selectedId) sinks.value = selectedId;
+
+        const haveAny = outs.length > 0;
+        sinks.disabled = !haveAny;
+        btnApply.disabled = !haveAny;
+
+        return selectedId;
+      }
+
+      // ---------- UI Handlers ----------
+      btnStart.addEventListener('click', async () => {
+        try {
+          setError('');
+          if (playing) return;
+          buildToneGraph();
+          await ac.resume();
+          osc.start(); playing = true;
+          btnStart.disabled = true; btnStop.disabled = false;
+          setStatus('Tone playing. Choose “NDI Audio” and click Apply.');
+        } catch (e) { setError('Failed to start tone: ' + (e.message || e)); err(e); }
+      });
+
+      btnStop.addEventListener('click', () => {
+        try { if (playing && osc) osc.stop(); } catch (e) { setError('Failed to stop tone: ' + (e.message || e)); err(e); }
+      });
+
+      gainCtl.addEventListener('input', () => {
+        if (gainNode && ac) gainNode.gain.setValueAtTime(gainCtl.value/100, ac.currentTime);
+      });
+
+      fileInp.addEventListener('change', () => {
+        const f = fileInp.files && fileInp.files[0];
+        if (!f) return;
+        player.src = URL.createObjectURL(f);
+        player.play().catch(()=>{});
+        if (!fileCtx) fileCtx = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+          if (fileSrc) fileSrc.disconnect();
+          fileSrc = fileCtx.createMediaElementSource(player);
+          fileAnalyser = fileCtx.createAnalyser(); fileAnalyser.fftSize = 256;
+          fileSrc.connect(fileAnalyser).connect(fileCtx.destination);
+        } catch (_) {
+          // MediaElementSource may only be created once per element; ignore if already attached
         }
-        sinksSel.disabled = false;
-        btnApply.disabled = false;
-        setStatus('Choose a device (look for “NDI Audio”).');
-      } catch (e) {
-        setError('Failed to enumerate devices: ' + e.message);
-      }
-    });
+      });
 
-    btnApply.addEventListener('click', async () => {
-      setError('');
-      if (!supportsSinkId()) {
-        setError('setSinkId() unsupported in this browser.');
-        return;
-      }
-      const id = sinksSel.value;
-      if (!id) { setError('Pick a device first.'); return; }
-      try {
-        await ensureAudioGraph();
-        await outEl.setSinkId(id);
-        setStatus('Output routed to: ' + (sinksSel.selectedOptions[0]?.textContent || id));
-      } catch (e) {
-        setError('setSinkId failed: ' + e.message);
-      }
-    });
+      btnList.addEventListener('click', async () => {
+        try {
+          const outs = await enumerateOutputs(true);
+          if (!outs.length) { setError('No audio outputs found. Use Chrome/Edge on desktop.'); return; }
+          const selected = refreshSelect(outs, true);
+          setStatus('Pick an output (look for “NDI Audio”).');
+          info('Device list shown. Preselected:', selected);
+        } catch (e) { setError('enumerateDevices failed: ' + (e.message || e)); err(e); }
+      });
 
-    // Surface basic capability info
-    if (!supportsSinkId()) {
-      setStatus('Note: This browser does not support setSinkId(). Use Chrome/Edge desktop.');
-    } else {
-      setStatus('Ready. Start the tone, then pick “NDI Audio.”');
-    }
-  })();
+      btnApply.addEventListener('click', async () => {
+        const id = sinks.value;
+        if (!id) { setError('Pick a device first.'); return; }
+        const selectedLabel = sinks.selectedOptions[0]?.textContent || '';
+        await applySinkToPage(id, selectedLabel);
+      });
+
+      // ---------- React to device changes ----------
+      if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+        navigator.mediaDevices.addEventListener('devicechange', async () => {
+          warn('devicechange event fired — outputs likely changed.');
+          try {
+            const outs = await enumerateOutputs(false);
+            const stillThere = outs.some(d => d.deviceId === currentSinkId);
+            const selectedAfterRefresh = refreshSelect(outs, true);
+
+            if (stillThere) {
+              info('Current sink still available:', currentSinkId, 'Re-applying sink to ensure continuity.');
+              try {
+                const label = outs.find(d => d.deviceId === currentSinkId)?.label || currentSinkId;
+                await applySinkToPage(currentSinkId, label);
+              } catch (e) {
+                warn('Re-apply after devicechange failed; will stay on current routing:', e);
+              }
+              showBanner('');
+            } else {
+              // Fallback to default sink
+              const label = outs.find(d => d.deviceId === 'default')?.label || 'default';
+              showBanner('Previously selected output disappeared. Falling back to default output.');
+              info('Falling back to default sink after devicechange.');
+              await applySinkToPage('default', label);
+              // Keep the UI select coherent
+              if (selectedAfterRefresh !== 'default' && outs.some(o => o.deviceId === 'default')) {
+                sinks.value = 'default';
+              }
+            }
+          } catch (e) {
+            err('devicechange handling failed:', e);
+          }
+        });
+      } else {
+        warn('devicechange not supported; dynamic device swaps may require manual re-apply.');
+      }
+
+      // ---------- Init ----------
+      startMeters();
+      if (supportsSinkId(outEl) && supportsSinkId(player)) {
+        setStatus('Ready. Start the tone or load a file, then pick “NDI Audio” and Apply.');
+      } else {
+        setStatus('This browser lacks setSinkId(); use Chrome/Edge desktop.');
+      }
+      info('Page initialized. setSinkId support (tone,player)=', supportsSinkId(outEl), supportsSinkId(player));
+    })();
   </script>
 </body>
 </html>
