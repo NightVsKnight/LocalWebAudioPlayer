@@ -255,7 +255,7 @@
     background: linear-gradient(180deg, rgba(8, 14, 36, 0.55), rgba(8, 14, 36, 0.2));
   }
   .item {
-    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+    display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: 12px; cursor: pointer; user-select: none;
     transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
   }
@@ -263,6 +263,14 @@
   .item.active { background: rgba(93, 251, 255, 0.16); outline: 1px solid rgba(93, 251, 255, 0.45); box-shadow: 0 0 24px rgba(93, 251, 255, 0.25); }
   .num { color: var(--muted); width: 2ch; text-align: right; text-shadow: 0 0 6px rgba(93, 251, 255, 0.35); }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rating { display: flex; gap: 2px; font-size: 14px; }
+  .rating .star {
+    cursor: pointer; color: rgba(255, 255, 255, 0.2); transition: color .15s ease, transform .15s ease;
+    user-select: none;
+  }
+  .rating .star.filled { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.6); }
+  .rating .star:hover { color: #ffd700; transform: scale(1.15); }
+  .rating:not(:hover) .star.filled:hover ~ .star { color: rgba(255, 255, 255, 0.2); }
   .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
   .footer-actions { display: flex; align-items: center; gap: 12px; }
   .history-btn {
@@ -673,6 +681,7 @@
   const DB_NAME = 'lwa-player';
   const STORE_NAME = 'handles';
   const HISTORY_STORE = 'play-history';
+  const RATINGS_STORE = 'track-ratings';
   const HISTORY_INDEX = 'by-started-at';
   const LAST_KEY = 'last-folder';
   const SHUFFLE_KEY = 'shuffle-enabled';
@@ -694,13 +703,14 @@
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
   const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
   const HISTORY_TIME_CACHE = new Map();
+  let trackRatings = new Map();
 
   const getHandleDb = () => {
     if (!('indexedDB' in window)) return null;
     if (!handleDbPromise) {
       handleDbPromise = new Promise((resolve, reject) => {
-        // Version 2: Added HISTORY_STORE for playback session tracking
-        const req = indexedDB.open(DB_NAME, 2);
+        // Version 3: Added RATINGS_STORE for track ratings
+        const req = indexedDB.open(DB_NAME, 3);
         req.onerror = () => reject(req.error);
         req.onupgradeneeded = () => {
           const db = req.result;
@@ -708,6 +718,9 @@
           if (!db.objectStoreNames.contains(HISTORY_STORE)) {
             const historyStore = db.createObjectStore(HISTORY_STORE, { keyPath: 'id', autoIncrement: true });
             historyStore.createIndex(HISTORY_INDEX, 'startedAt');
+          }
+          if (!db.objectStoreNames.contains(RATINGS_STORE)) {
+            db.createObjectStore(RATINGS_STORE);
           }
         };
         req.onsuccess = () => resolve(req.result);
@@ -741,6 +754,49 @@
       req.onerror = () => reject(req.error);
     });
   };
+
+  const setTrackRating = async (trackKey, rating) => {
+    const db = await getHandleDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(RATINGS_STORE, 'readwrite');
+      tx.objectStore(RATINGS_STORE).put(rating, trackKey);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    trackRatings.set(trackKey, rating);
+  };
+
+  const getTrackRating = async (trackKey) => {
+    const db = await getHandleDb();
+    if (!db) return 0;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(RATINGS_STORE, 'readonly');
+      const req = tx.objectStore(RATINGS_STORE).get(trackKey);
+      req.onsuccess = () => resolve(req.result ?? 0);
+      req.onerror = () => reject(req.error);
+    });
+  };
+
+  const loadAllRatings = async () => {
+    const db = await getHandleDb();
+    if (!db) return;
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(RATINGS_STORE, 'readonly');
+      const store = tx.objectStore(RATINGS_STORE);
+      const req = store.openCursor();
+      req.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (cursor) {
+          trackRatings.set(cursor.key, cursor.value);
+          cursor.continue();
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
 
   const pruneHistoryEntries = async () => {
     const db = await getHandleDb();
@@ -2421,12 +2477,36 @@
     nameEl.className = 'name';
     nameEl.textContent = track.displayName;
 
+    const ratingEl = document.createElement('div');
+    ratingEl.className = 'rating';
+    const key = trackKey(track);
+    const currentRating = trackRatings.get(key) || 0;
+    for (let i = 1; i <= 5; i++) {
+      const star = document.createElement('span');
+      star.className = 'star' + (i <= currentRating ? ' filled' : '');
+      star.textContent = '★';
+      star.dataset.rating = i;
+      star.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const newRating = (currentRating === i) ? 0 : i;
+        setTrackRating(key, newRating).then(() => {
+          updateTrackRatingDisplay(row, newRating);
+        }).catch(err => {
+          console.error('Failed setting track rating', err);
+        });
+      });
+      ratingEl.appendChild(star);
+    }
+
     const durEl = document.createElement('div');
     durEl.className = 'dur';
     durEl.textContent = isFinite(track.duration) ? fmtTime(track.duration) : '';
 
-    row.append(icon, nameEl, durEl);
-    row.addEventListener('click', () => playIndex(index, {autoplay:true, skipReason:'manual'}));
+    row.append(icon, nameEl, ratingEl, durEl);
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.rating')) return;
+      playIndex(index, {autoplay:true, skipReason:'manual'});
+    });
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -2440,6 +2520,17 @@
     }
 
     return row;
+  }
+
+  function updateTrackRatingDisplay(row, rating) {
+    const stars = row.querySelectorAll('.rating .star');
+    stars.forEach((star, i) => {
+      if (i < rating) {
+        star.classList.add('filled');
+      } else {
+        star.classList.remove('filled');
+      }
+    });
   }
 
   function primeDuration(index, durEl) {
@@ -2611,6 +2702,9 @@
   setLoopLabel();
   loadPreferences();
   loadHistoryEntries();
+  loadAllRatings().catch(err => {
+    console.error('Failed loading track ratings', err);
+  });
 
   if (historyToggleBtn) {
     historyToggleBtn.addEventListener('click', () => {
