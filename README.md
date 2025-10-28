@@ -16,7 +16,18 @@ I created this because:
 - Includes selectable spectrum analyzer visualizations (Neon Bars, Glow Wave, Pulse Halo) with logarithmic frequency mapping for balanced display across the audible spectrum (20Hz-20kHz). The selector is disabled if the browser lacks AudioContext support.
 - Supports volume control via on-screen slider and Up/Down arrow keys (5% increments). Volume preference is persisted between sessions.
 - Integrates with OS media controls (Bluetooth headsets, keyboard media keys, system tray) via the Media Session API.
+- Logs every listening session with timestamps, duration heard, and automatic skip detection (<50% heard) that you can review from the History overlay (open it with the footer History button).
+- Tracks actual listening time (pauses excluded) so the history shows how much you truly heard; the % column turns yellow when you hear less than 100%, blue right at 100%, and green when rewinds push you beyond the original duration. When the filename includes a YouTube ID, the History overlay links straight back to the original video for quick reference.
 - **OBS Metadata Export:** Export "now playing" track metadata to a text file for use in OBS overlays and streaming software (Chromium browsers only).
+
+## Playback History
+
+The player now tracks each time you start or stop a song so you can understand how you actually listen:
+
+- Every play session records the start timestamp, track metadata, how many seconds you listened, and the percent of the track you heard.
+- Sessions that end before 50% completion are marked as **Skipped**, letting you instantly spot tracks you abandon.
+- History is stored locally in IndexedDB and survives page reloads; the most recent 500 sessions are retained automatically.
+- Open the **History** overlay (click the footer History button) to inspect your listening log. Each row shows when the track started, the path/artist, how long you listened, and whether it completed, was skipped, or manually stopped.
 
 ## OBS Metadata Export
 
@@ -63,6 +74,15 @@ Click **⚙️ Settings** → **Disable** to stop exporting. You can re-enable i
 ## Manual Testing
 - Toggle Shuffle or Loop, reload `player.html`, and confirm the controls restore to their previous selections (initial defaults: Shuffle On, Loop All).
 - Start a track, reload `player.html`, and verify the same track is selected; if you remove or rename it, the player should open with the first track (or a random one if Shuffle is enabled).
+- Start playback, open the **History** overlay, and confirm a new row appears with the correct start time, track info, and listened duration.
+- Skip a track before it reaches the halfway point and verify the history entry is labeled **Skipped** with a percent heard below 50%.
+- Play a track through without rewinding and confirm the % heard badge lands on a blue **100%** (±1%).
+- Skip ahead during playback so you listen to less than the full duration and verify the % heard badge remains yellow (<100%).
+- Rewind to rehear parts of the song and confirm the % heard badge turns green once you exceed 100% listened.
+- In the History overlay, click the linked path for a track whose filename contains a YouTube ID (e.g., `[abc123]`) and verify it opens the corresponding video in a new tab.
+- Delete a single history row via the **Delete** action and confirm it disappears after confirmation.
+- Use the **Clear** button in the History overlay, confirm the prompt, and verify all stored entries are removed while the overlay remains open.
+- Let a track play to completion, reload the page, and confirm the completed entry persists in the History overlay with the correct timestamp and duration data.
 - Load an MP3 folder, start playback, and confirm the announcer introduces the first track.
 - Press Next or Previous and listen for "Skipped track name ... Now playing ..." transition.
 - Let a track complete naturally and listen for "That was track name ... Now playing ..." transition.
