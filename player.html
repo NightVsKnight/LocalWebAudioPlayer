@@ -264,6 +264,121 @@
   .num { color: var(--muted); width: 2ch; text-align: right; text-shadow: 0 0 6px rgba(93, 251, 255, 0.35); }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dur { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .footer-actions { display: flex; align-items: center; gap: 12px; }
+  .history-btn {
+    appearance: none; border: 1px solid var(--border); border-radius: 10px;
+    background: rgba(9, 15, 33, 0.78); color: var(--text); font-weight: 600;
+    padding: 8px 14px; cursor: pointer; transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+  }
+  .history-btn:hover {
+    border-color: rgba(93, 251, 255, 0.55);
+    box-shadow: 0 0 20px rgba(93, 251, 255, 0.25);
+  }
+  .history-overlay {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 32px; background: rgba(4, 7, 18, 0.82); backdrop-filter: blur(8px);
+    z-index: 300;
+  }
+  .history-overlay[hidden] { display: none; }
+  .history-sheet {
+    width: min(1080px, 96vw); max-height: min(90vh, 760px);
+    background: linear-gradient(150deg, rgba(11, 18, 46, 0.96), rgba(6, 12, 30, 0.94));
+    border: 1px solid rgba(93, 251, 255, 0.25);
+    border-radius: 18px; box-shadow: 0 30px 80px rgba(3, 9, 24, 0.65), 0 0 40px rgba(93, 251, 255, 0.18);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .history-sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px; border-bottom: 1px solid rgba(93, 251, 255, 0.18);
+  }
+  .history-title { margin: 0; font-size: 20px; font-weight: 600; }
+  .history-header-actions { display: flex; align-items: center; gap: 12px; }
+  .history-counter { font-size: 12px; color: var(--muted); }
+  .history-clear {
+    appearance: none; border: 1px solid rgba(255, 99, 132, 0.35); border-radius: 10px;
+    background: rgba(255, 99, 132, 0.12); color: #ff99a6; font-weight: 600;
+    padding: 6px 12px; cursor: pointer; transition: border-color .2s ease, background .2s ease, color .2s ease;
+  }
+  .history-clear:hover {
+    border-color: rgba(255, 99, 132, 0.55);
+    background: rgba(255, 99, 132, 0.18);
+    color: #ffc0c8;
+  }
+  .history-close {
+    appearance: none; border: none; background: transparent; color: var(--muted);
+    font-size: 26px; width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+    transition: background .2s ease, color .2s ease;
+  }
+  .history-close:hover { background: rgba(93, 251, 255, 0.15); color: var(--text); }
+  .history-sheet-body {
+    padding: 18px 24px 24px; overflow: auto; display: flex; flex-direction: column; gap: 18px;
+  }
+  .history-body-actions { display: none; }
+  .history-empty {
+    text-align: center; font-size: 14px; color: var(--muted);
+    padding: 30px 12px; border: 1px dashed rgba(93, 251, 255, 0.25); border-radius: 14px;
+    background: rgba(9, 15, 33, 0.4);
+  }
+  .history-table-wrap { overflow: auto; }
+  .history-table-wrap.hide { display: none; }
+  .history-table {
+    width: 100%; border-collapse: collapse; min-width: 720px;
+    background: rgba(5, 12, 28, 0.75);
+  }
+  .history-table tr.live { background: rgba(93, 251, 255, 0.04); }
+  .history-table th,
+  .history-table td {
+    padding: 12px 14px; text-align: left; border-bottom: 1px solid rgba(93, 251, 255, 0.12);
+    vertical-align: top;
+  }
+  .history-table th {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
+    background: rgba(13, 20, 48, 0.55);
+    position: sticky; top: 0;
+    white-space: nowrap;
+  }
+  .history-table td { font-size: 13px; color: var(--text); }
+  .history-table td.time-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .history-table td.status-cell { width: 1%; white-space: nowrap; }
+  .history-table td.action-cell { width: 1%; white-space: nowrap; text-align: right; }
+  .history-track-cell { font-weight: 600; word-break: break-word; }
+  .history-table td.meta-cell { color: var(--muted); font-size: 12px; line-height: 1.4; word-break: break-word; }
+  .history-path-link { color: var(--accent); text-decoration: none; }
+  .history-path-link:hover { text-decoration: underline; }
+  .heard-indicator { font-weight: 600; }
+  .heard-indicator.heard-low { color: #ffd66b; }
+  .heard-indicator.heard-exact { color: #82c3ff; }
+  .heard-indicator.heard-high { color: #7efce0; }
+  .history-status {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    border: 1px solid transparent; background: rgba(255,255,255,0.04);
+    text-transform: capitalize;
+  }
+  .history-status.completed { border-color: rgba(93, 251, 255, 0.45); color: var(--accent); }
+  .history-status.skipped { border-color: rgba(255, 71, 87, 0.65); color: #ff8b99; }
+  .history-status.scrubbed { border-color: rgba(255, 214, 0, 0.75); color: #ffeaa7; }
+  .history-status.fast-forward { border-color: rgba(255, 166, 77, 0.75); color: #ffba7a; }
+  .history-status.rewound { border-color: rgba(67, 255, 192, 0.75); color: #7efce0; }
+  .history-status.stopped { border-color: rgba(255, 165, 2, 0.55); color: #ffcd82; }
+  .history-status.live { border-color: rgba(255, 255, 255, 0.3); color: var(--text); background: rgba(93, 251, 255, 0.12); }
+  .history-delete-btn {
+    appearance: none; border: 1px solid rgba(255, 99, 132, 0.4);
+    border-radius: 8px; background: rgba(255, 99, 132, 0.1);
+    color: #ff99a6; padding: 4px 10px; cursor: pointer;
+    font-size: 12px; font-weight: 600;
+    transition: border-color .2s ease, background .2s ease, color .2s ease;
+  }
+  .history-delete-btn:hover {
+    border-color: rgba(255, 99, 132, 0.65);
+    background: rgba(255, 99, 132, 0.2);
+    color: #ffc0c8;
+  }
+  @media (max-width: 640px) {
+    .history-sheet { width: 100%; height: 100%; border-radius: 0; }
+    .history-sheet-body { padding: 18px; }
+    .history-table { min-width: unset; }
+  }
   footer {
     padding: 10px 18px 14px; display: flex; align-items: center; justify-content: space-between;
     border-top: 1px solid var(--border); color: var(--muted); font-size: 12px;
@@ -437,8 +552,43 @@
 
     <footer>
       <div>Shortcuts: <span class="kbd">Space</span> Play/Pause · <span class="kbd">←/→</span> Seek · <span class="kbd">Cmd/Ctrl+←/→</span> Prev/Next · <span class="kbd">↑/↓</span> Volume · <span class="kbd">S</span> Shuffle · <span class="kbd">L</span> Loop · <span class="kbd">A</span> Announce</div>
-      <div id="count">0 tracks</div>
+      <div class="footer-actions">
+        <div id="count">0 tracks</div>
+        <button class="history-btn" id="historyToggleBtn" type="button">📜 History</button>
+      </div>
     </footer>
+  </div>
+
+  <div class="history-overlay" id="historyOverlay" hidden aria-hidden="true">
+    <div class="history-sheet" role="dialog" aria-modal="true" aria-labelledby="historyTitle">
+      <div class="history-sheet-header">
+        <h2 class="history-title" id="historyTitle">Listening History</h2>
+        <div class="history-header-actions">
+          <span class="history-counter" id="historyCountLabel">0 entries</span>
+          <button class="history-clear" id="historyClearBtn" type="button">Clear</button>
+          <button class="history-close" id="historyCloseBtn" type="button" aria-label="Close history">×</button>
+        </div>
+      </div>
+      <div class="history-sheet-body">
+        <p class="history-empty" id="historyEmptyState">No listening history yet.</p>
+        <div class="history-table-wrap hide" id="historyTableWrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th scope="col">Started</th>
+                <th scope="col">Track</th>
+                <th scope="col">Artist • Path</th>
+                <th scope="col">Listened</th>
+                <th scope="col">% Heard</th>
+                <th scope="col">Status</th>
+                <th scope="col" aria-label="Actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="historyTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Settings Modal -->
@@ -480,6 +630,14 @@
 (() => {
   const chooseBtn   = document.getElementById('chooseBtn');
   const listEl      = document.getElementById('list');
+  const historyOverlay = document.getElementById('historyOverlay');
+  const historyToggleBtn = document.getElementById('historyToggleBtn');
+  const historyCloseBtn = document.getElementById('historyCloseBtn');
+  const historyTableBody = document.getElementById('historyTbody');
+  const historyCountLabel = document.getElementById('historyCountLabel');
+  const historyClearBtn = document.getElementById('historyClearBtn');
+  const historyTableWrap = document.getElementById('historyTableWrap');
+  const historyEmptyEl = document.getElementById('historyEmptyState');
   const audio       = document.getElementById('audio');
   const nowTitleEl  = document.getElementById('nowTitle');
   const nowArtistEl = document.getElementById('nowArtist');
@@ -514,6 +672,8 @@
   /** Persistence */
   const DB_NAME = 'lwa-player';
   const STORE_NAME = 'handles';
+  const HISTORY_STORE = 'play-history';
+  const HISTORY_INDEX = 'by-started-at';
   const LAST_KEY = 'last-folder';
   const SHUFFLE_KEY = 'shuffle-enabled';
   const LOOP_KEY = 'loop-mode';
@@ -523,18 +683,32 @@
   const VOLUME_KEY = 'lwa-volume';
   const TEXT_FILE_HANDLE_KEY = 'text-file-handle';
   const TEXT_FILE_ENABLED_KEY = 'text-file-enabled';
+  const HISTORY_RENDER_LIMIT = 200;
+  const HISTORY_MAX_ENTRIES = 500;
+  const SKIP_THRESHOLD = 0.5;
+  const REWIND_RATIO_THRESHOLD = 1.005;
+  const HEARD_LOW_RATIO_THRESHOLD = 0.995;
+  const REWIND_DISPLAY_PERCENT = REWIND_RATIO_THRESHOLD * 100;
+  const HEARD_LOW_DISPLAY_PERCENT = HEARD_LOW_RATIO_THRESHOLD * 100;
   let handleDbPromise = null;
   const NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const HISTORY_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  const HISTORY_TIME_CACHE = new Map();
 
   const getHandleDb = () => {
     if (!('indexedDB' in window)) return null;
     if (!handleDbPromise) {
       handleDbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, 1);
+        // Version 2: Added HISTORY_STORE for playback session tracking
+        const req = indexedDB.open(DB_NAME, 2);
         req.onerror = () => reject(req.error);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+          if (!db.objectStoreNames.contains(HISTORY_STORE)) {
+            const historyStore = db.createObjectStore(HISTORY_STORE, { keyPath: 'id', autoIncrement: true });
+            historyStore.createIndex(HISTORY_INDEX, 'startedAt');
+          }
         };
         req.onsuccess = () => resolve(req.result);
       }).catch(err => {
@@ -566,6 +740,126 @@
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
+  };
+
+  const pruneHistoryEntries = async () => {
+    const db = await getHandleDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readwrite');
+      const store = tx.objectStore(HISTORY_STORE);
+      const index = store.index(HISTORY_INDEX);
+      let kept = 0;
+      const cursorReq = index.openCursor(null, 'prev');
+      cursorReq.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        if (kept >= HISTORY_MAX_ENTRIES) {
+          cursor.delete();
+        } else {
+          kept += 1;
+        }
+        cursor.continue();
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const fetchRecentHistory = async (limit = HISTORY_RENDER_LIMIT) => {
+    const db = await getHandleDb();
+    if (!db) return [];
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readonly');
+      const store = tx.objectStore(HISTORY_STORE);
+      const index = store.index(HISTORY_INDEX);
+      const results = [];
+      const cursorReq = index.openCursor(null, 'prev');
+      cursorReq.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        if (results.length < limit) {
+          results.push(cursor.value);
+          cursor.continue();
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+      tx.oncomplete = () => resolve(results);
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const prependHistoryEntry = (entry) => {
+    historyEntries = [entry, ...historyEntries].slice(0, HISTORY_RENDER_LIMIT);
+    requestHistoryRender();
+  };
+
+  const deleteHistoryEntryById = async (id) => {
+    const db = await getHandleDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readwrite');
+      tx.objectStore(HISTORY_STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const clearHistoryStore = async () => {
+    const db = await getHandleDb();
+    if (!db) return;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readwrite');
+      tx.objectStore(HISTORY_STORE).clear();
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  };
+
+  const addHistoryEntry = async (entry) => {
+    const db = await getHandleDb();
+    if (!db) return null;
+    let storedEntry = null;
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_STORE, 'readwrite');
+      const store = tx.objectStore(HISTORY_STORE);
+      const req = store.add(entry);
+      req.onsuccess = () => {
+        storedEntry = { ...entry, id: req.result };
+      };
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    if (storedEntry) {
+      prependHistoryEntry(storedEntry);
+      try {
+        await pruneHistoryEntries();
+      } catch (err) {
+        console.warn('Failed pruning play history', err);
+      }
+      if (liveHistoryEntry && typeof storedEntry.id === 'number') {
+        if (liveHistoryEntry.id === storedEntry.id) {
+          liveHistoryEntry = null;
+          requestHistoryRender();
+        } else if (liveHistoryEntry.trackKey === storedEntry.trackKey && liveHistoryEntry.startedAt === storedEntry.startedAt) {
+          liveHistoryEntry.id = storedEntry.id;
+          liveHistoryEntry = null;
+          requestHistoryRender();
+        }
+      }
+    }
+    return storedEntry;
+  };
+
+  const loadHistoryEntries = async () => {
+    try {
+      historyEntries = await fetchRecentHistory(HISTORY_RENDER_LIMIT);
+      requestHistoryRender();
+    } catch (err) {
+      console.error('Failed loading playback history', err);
+    }
   };
 
   const saveLastHandle = async (handle) => {
@@ -612,6 +906,10 @@
   let lastAnnouncedArtist = null;
   let lastAnnouncedTitle = null;
   let announceTimer = null;
+  let historyEntries = [];
+  let liveHistoryEntry = null;
+  let historyRenderScheduled = false;
+  let activeSession = null;
 
   /** Media Session API support */
   const mediaSessionSupported = 'mediaSession' in navigator;
@@ -681,12 +979,14 @@
       navigator.mediaSession.setActionHandler('seekbackward', (details) => {
         if (!isFinite(audio.duration) || audio.duration <= 0) return;
         const skipTime = details.seekOffset || 10;
-        audio.currentTime = Math.max(audio.currentTime - skipTime, 0);
+        const next = Math.max(audio.currentTime - skipTime, 0);
+        audio.currentTime = next;
       });
       navigator.mediaSession.setActionHandler('seekforward', (details) => {
         if (!isFinite(audio.duration) || audio.duration <= 0) return;
         const skipTime = details.seekOffset || 10;
-        audio.currentTime = Math.min(audio.currentTime + skipTime, audio.duration);
+        const next = Math.min(audio.currentTime + skipTime, audio.duration);
+        audio.currentTime = next;
       });
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (!isFinite(audio.duration) || audio.duration <= 0) return;
@@ -1081,6 +1381,283 @@
   };
   const stripTrailingTags = (value) => value.replace(/\s*[\[\(][^)\]]*[\)\]]\s*$/g, '').trim();
   const resolveFolderKey = (track) => normalizeSpaces(track.path[0] || rootDirName || '').toLowerCase();
+  const extractYouTubeIdFrom = (...values) => {
+    for (const value of values) {
+      if (typeof value !== 'string') continue;
+      const withoutExt = value.replace(/\.[^./]*$/, '');
+      const match = withoutExt.match(/\[([a-zA-Z0-9_-]{6,})\]$/);
+      if (match) return match[1];
+    }
+    return null;
+  };
+  const resolveYouTubeUrl = (entry) => {
+    if (!entry) return null;
+    const id = extractYouTubeIdFrom(entry.trackName, entry.relativePath);
+    return id ? `https://youtu.be/${id}` : null;
+  };
+
+  const isRewoundPercent = (percent) => typeof percent === 'number' && percent > REWIND_RATIO_THRESHOLD;
+  const describeHistoryStatus = (entry) => {
+    if (!entry) return { label: 'Stopped', className: 'stopped' };
+    if (entry.reason === 'scrubbed') return { label: 'Scrubbed', className: 'scrubbed' };
+    if (entry.reason === 'fast-forwarded') return { label: 'Skipped', className: 'skipped' };
+    if (entry.reason === 'rewound' || isRewoundPercent(entry.percentPlayed)) {
+      return { label: 'Rewound', className: 'rewound' };
+    }
+    if (entry.reason === 'completed') return { label: 'Completed', className: 'completed' };
+    if (entry.reason === 'folder-change') return { label: 'Folder Change', className: 'stopped' };
+    if (entry.skipped || entry.reason === 'skipped') return { label: 'Skipped', className: 'skipped' };
+    if (entry.reason === 'paused') return { label: 'Paused', className: 'stopped' };
+    if (entry.reason === 'auto-advance') return { label: 'Auto Next', className: 'stopped' };
+    return { label: 'Stopped', className: 'stopped' };
+  };
+
+  const formatHistoryTimestamp = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '—';
+    let cached = HISTORY_TIME_CACHE.get(numeric);
+    if (cached) {
+      HISTORY_TIME_CACHE.delete(numeric);
+      HISTORY_TIME_CACHE.set(numeric, cached);
+    } else {
+      cached = HISTORY_TIME_FORMATTER.format(new Date(numeric));
+      HISTORY_TIME_CACHE.set(numeric, cached);
+    }
+    // Keep 2× render limit to handle both visible entries and recently removed items
+    const maxCacheSize = HISTORY_RENDER_LIMIT * 2;
+    if (HISTORY_TIME_CACHE.size > maxCacheSize) {
+      const excess = HISTORY_TIME_CACHE.size - maxCacheSize;
+      const keysToDelete = [];
+      const iter = HISTORY_TIME_CACHE.keys();
+      for (let i = 0; i < excess; i += 1) {
+        const next = iter.next();
+        if (next.done) break;
+        keysToDelete.push(next.value);
+      }
+      keysToDelete.forEach(key => HISTORY_TIME_CACHE.delete(key));
+    }
+    return cached;
+  };
+
+  const getActiveSessionListenedSeconds = () => {
+    if (!activeSession) return 0;
+    let total = activeSession.listenedMs || 0;
+    if (typeof activeSession.timerStart === 'number') {
+      total += performance.now() - activeSession.timerStart;
+    }
+    return total / 1000;
+  };
+
+  const startListeningClock = () => {
+    if (!activeSession) return;
+    if (typeof activeSession.timerStart === 'number') return;
+    activeSession.timerStart = performance.now();
+  };
+
+  const stopListeningClock = () => {
+    if (!activeSession) return;
+    if (typeof activeSession.timerStart !== 'number') return;
+    activeSession.listenedMs = (activeSession.listenedMs || 0) + (performance.now() - activeSession.timerStart);
+    activeSession.timerStart = null;
+    requestHistoryRender();
+  };
+
+  const syncLiveHistoryMetrics = () => {
+    if (!activeSession || !liveHistoryEntry) return;
+    const listenedSeconds = getActiveSessionListenedSeconds();
+    liveHistoryEntry.playedSeconds = listenedSeconds;
+    liveHistoryEntry.percentPlayed = activeSession.duration && activeSession.duration > 0
+      ? listenedSeconds / activeSession.duration
+      : null;
+  };
+
+  const resolvePlayedSeconds = (entry, duration) => {
+    if (!entry) return 0;
+    if (typeof entry.playedSeconds === 'number' && isFinite(entry.playedSeconds)) {
+      return Math.max(0, entry.playedSeconds);
+    }
+    if (typeof entry.percentPlayed === 'number' && isFinite(entry.percentPlayed) && isFinite(duration) && duration > 0) {
+      return Math.max(0, entry.percentPlayed * duration);
+    }
+    return 0;
+  };
+
+  const renderHistory = () => {
+    if (!historyTableBody) return;
+    syncLiveHistoryMetrics();
+    const entries = [];
+    if (liveHistoryEntry) entries.push(liveHistoryEntry);
+    if (historyEntries?.length) entries.push(...historyEntries);
+    const hasEntries = entries.length > 0;
+    if (historyEmptyEl) historyEmptyEl.classList.toggle('hide', hasEntries);
+    if (historyTableWrap) historyTableWrap.classList.toggle('hide', !hasEntries);
+    if (historyCountLabel) historyCountLabel.textContent = hasEntries ? `${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}` : '0 entries';
+    historyTableBody.innerHTML = '';
+    if (!hasEntries) return;
+
+    entries.forEach(entry => {
+      if (!entry) return;
+      const isLive = Boolean(entry.live);
+      const duration = (typeof entry.duration === 'number' && isFinite(entry.duration)) ? entry.duration : NaN;
+      const playedSeconds = resolvePlayedSeconds(entry, duration);
+      const percentPlayed = (typeof entry.percentPlayed === 'number' && isFinite(entry.percentPlayed))
+        ? entry.percentPlayed
+        : (isFinite(duration) && duration > 0 ? playedSeconds / duration : null);
+
+      const row = document.createElement('tr');
+      if (isLive) row.classList.add('live');
+
+      const startedCell = document.createElement('td');
+      startedCell.className = 'time-cell';
+      startedCell.textContent = formatHistoryTimestamp(entry.startedAt);
+      row.appendChild(startedCell);
+
+      const trackCell = document.createElement('td');
+      trackCell.className = 'history-track-cell';
+      trackCell.textContent = entry.trackName || 'Unknown Track';
+      row.appendChild(trackCell);
+
+      const metaCell = document.createElement('td');
+      metaCell.className = 'meta-cell';
+      const pathText = entry.relativePath && entry.relativePath !== entry.trackName ? entry.relativePath : '';
+      const youtubeUrl = resolveYouTubeUrl(entry);
+      let hasMeta = false;
+      if (entry.artist) {
+        metaCell.append(entry.artist);
+        hasMeta = true;
+      }
+      if (pathText) {
+        if (hasMeta) metaCell.append(document.createTextNode(' • '));
+        if (youtubeUrl) {
+          const link = document.createElement('a');
+          link.className = 'history-path-link';
+          link.href = youtubeUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = pathText;
+          metaCell.appendChild(link);
+        } else {
+          metaCell.append(pathText);
+        }
+        hasMeta = true;
+      }
+      if (!hasMeta) {
+        metaCell.textContent = '—';
+      }
+      row.appendChild(metaCell);
+
+      const listenedCell = document.createElement('td');
+      listenedCell.className = 'time-cell';
+      const playedText = fmtTime(playedSeconds);
+      const totalText = isFinite(duration) ? fmtTime(duration) : '—';
+      listenedCell.textContent = `${playedText} / ${totalText}`;
+      row.appendChild(listenedCell);
+
+      const percentCell = document.createElement('td');
+      percentCell.className = 'time-cell';
+      const percentSpan = document.createElement('span');
+      percentSpan.className = 'heard-indicator';
+      if (typeof percentPlayed === 'number' && isFinite(percentPlayed)) {
+        const percentValue = percentPlayed * 100;
+        percentSpan.textContent = `${Math.round(percentValue)}%`;
+        if (percentValue > REWIND_DISPLAY_PERCENT) percentSpan.classList.add('heard-high');
+        else if (percentValue < HEARD_LOW_DISPLAY_PERCENT) percentSpan.classList.add('heard-low');
+        else percentSpan.classList.add('heard-exact');
+      } else {
+        percentSpan.textContent = '—';
+        percentSpan.classList.add('heard-low');
+      }
+      percentCell.appendChild(percentSpan);
+      row.appendChild(percentCell);
+
+      const statusCell = document.createElement('td');
+      statusCell.className = 'status-cell';
+      let statusInfo;
+      if (isLive) {
+        if (isRewoundPercent(percentPlayed)) {
+          statusInfo = { label: 'Rewinding', className: 'rewound' };
+        } else if (entry.state === 'paused') {
+          statusInfo = { label: 'Paused', className: 'stopped' };
+        } else {
+          statusInfo = { label: 'Listening', className: 'live' };
+        }
+      } else {
+        statusInfo = describeHistoryStatus({ ...entry, percentPlayed });
+      }
+      const badge = document.createElement('span');
+      badge.className = `history-status ${statusInfo.className || ''}`.trim();
+      badge.textContent = statusInfo.label;
+      statusCell.appendChild(badge);
+      row.appendChild(statusCell);
+
+      const actionCell = document.createElement('td');
+      actionCell.className = 'action-cell';
+      if (!isLive && typeof entry.id === 'number') {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'history-delete-btn';
+        deleteBtn.type = 'button';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', async () => {
+          const confirmed = window.confirm('Delete this history entry? This action cannot be undone.');
+          if (!confirmed) return;
+          try {
+            await deleteHistoryEntryById(entry.id);
+            historyEntries = historyEntries.filter(item => item.id !== entry.id);
+            requestHistoryRender();
+          } catch (err) {
+            console.error('Failed deleting history entry', err);
+          }
+        });
+        actionCell.appendChild(deleteBtn);
+      }
+      row.appendChild(actionCell);
+
+      historyTableBody.appendChild(row);
+    });
+  };
+
+  const requestHistoryRender = () => {
+    if (historyRenderScheduled) return;
+    historyRenderScheduled = true;
+    const schedule = window.requestAnimationFrame || (cb => setTimeout(cb, 16));
+    schedule(() => {
+      historyRenderScheduled = false;
+      renderHistory();
+    });
+  };
+
+  const setLiveEntryState = (state) => {
+    if (!liveHistoryEntry) return;
+    if (liveHistoryEntry.state === state) return;
+    liveHistoryEntry.state = state;
+    requestHistoryRender();
+  };
+
+  const isHistoryVisible = () => Boolean(historyOverlay && !historyOverlay.hidden);
+
+  const openHistoryOverlay = () => {
+    if (isHistoryVisible()) {
+      if (historyCloseBtn) historyCloseBtn.focus();
+      return;
+    }
+    if (!historyOverlay) return;
+    historyOverlay.hidden = false;
+    historyOverlay.setAttribute('aria-hidden', 'false');
+    requestHistoryRender();
+    if (historyCloseBtn) {
+      historyCloseBtn.focus();
+    }
+  };
+
+  const closeHistoryOverlay = () => {
+    if (!historyOverlay || historyOverlay.hidden) return;
+    historyOverlay.hidden = true;
+    historyOverlay.setAttribute('aria-hidden', 'true');
+    if (historyToggleBtn) {
+      historyToggleBtn.focus({ preventScroll: true });
+    }
+  };
+
 
   const ANNOUNCE_RULES = [
     {
@@ -1203,6 +1780,140 @@
     } else {
       dispatchAnnouncement();
     }
+  };
+
+  const beginPlaySession = () => {
+    if (current < 0 || !tracks[current]) {
+      activeSession = null;
+      return;
+    }
+    const track = tracks[current];
+    const key = trackKey(track);
+    if (activeSession && activeSession.trackKey === key) {
+      setLiveEntryState(audio.paused ? 'paused' : 'playing');
+      requestHistoryRender();
+      return;
+    }
+    const details = buildAnnouncementDetails(track) || {};
+    const relativePath = track.path.length ? `${track.path.join('/')}/${track.name}` : track.name;
+    const startPosition = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+    const durationGuess = Number.isFinite(audio.duration)
+      ? audio.duration
+      : (Number.isFinite(track.duration) ? track.duration : null);
+    activeSession = {
+      trackKey: key,
+      trackName: track.displayName || track.name,
+      artist: details.artist || '',
+      relativePath,
+      duration: durationGuess,
+      startPosition,
+      lastPosition: startPosition,
+      startedAt: Date.now(),
+      listenedMs: 0,
+      timerStart: audio.paused ? null : performance.now(),
+    };
+    liveHistoryEntry = {
+      ...activeSession,
+      playedSeconds: 0,
+      percentPlayed: durationGuess && durationGuess > 0 ? 0 : null,
+      live: true,
+      state: audio.paused ? 'paused' : 'playing',
+      id: null,
+    };
+    requestHistoryRender();
+  };
+
+  const updateSessionDuration = (value) => {
+    if (!activeSession) return;
+    if (typeof value === 'number' && isFinite(value) && value > 0) {
+      activeSession.duration = value;
+      if (liveHistoryEntry) {
+        liveHistoryEntry.duration = value;
+        if (liveHistoryEntry.playedSeconds !== undefined) {
+          liveHistoryEntry.percentPlayed = liveHistoryEntry.playedSeconds / value;
+        }
+        requestHistoryRender();
+      }
+    }
+  };
+
+  const updateSessionPosition = (value) => {
+    if (!activeSession) return;
+    if (typeof value === 'number' && value >= 0 && isFinite(value)) {
+      activeSession.lastPosition = value;
+    }
+  };
+  let pendingSeekPosition = null;
+  let seekPositionScheduled = false;
+  const scheduleSeekPositionUpdate = (value) => {
+    pendingSeekPosition = value;
+    if (seekPositionScheduled) return;
+    seekPositionScheduled = true;
+    const schedule = window.requestAnimationFrame || (cb => setTimeout(cb, 16));
+    schedule(() => {
+      seekPositionScheduled = false;
+      if (pendingSeekPosition !== null) {
+        updateSessionPosition(pendingSeekPosition);
+        pendingSeekPosition = null;
+      }
+    });
+  };
+
+  const finalizePlaySession = (reason = 'stopped', { position } = {}) => {
+    if (!activeSession) {
+      return;
+    }
+    stopListeningClock();
+    const listenedSeconds = getActiveSessionListenedSeconds();
+    const duration = (typeof activeSession.duration === 'number' && isFinite(activeSession.duration) && activeSession.duration > 0)
+      ? activeSession.duration
+      : null;
+    if (typeof position === 'number' && position >= 0 && isFinite(position)) {
+      activeSession.lastPosition = position;
+    }
+    const playedSeconds = Math.max(0, listenedSeconds);
+    const percentPlayed = (duration && duration > 0)
+      ? (playedSeconds / duration)
+      : null;
+    // Percent-based tagging:
+    // - Above REWIND_RATIO_THRESHOLD (100.5%) counts as a rewind because listeners replayed a portion.
+    // - Between SKIP_THRESHOLD and ~100% is treated as a normal completion.
+    // - Below SKIP_THRESHOLD is classified as a fast-forward/skip.
+    let finalReason = reason;
+    if (percentPlayed !== null) {
+      if (isRewoundPercent(percentPlayed)) {
+        finalReason = 'rewound';
+      } else if (percentPlayed >= SKIP_THRESHOLD) {
+        finalReason = 'completed';
+      } else {
+        finalReason = 'fast-forwarded';
+      }
+    } else if (reason === 'manual') {
+      finalReason = 'fast-forwarded';
+    }
+    if (finalReason === 'auto') {
+      finalReason = 'auto-advance';
+    }
+    const skipped = finalReason === 'fast-forwarded';
+    const entry = {
+      trackKey: activeSession.trackKey,
+      trackName: activeSession.trackName,
+      artist: activeSession.artist,
+      relativePath: activeSession.relativePath,
+      startedAt: activeSession.startedAt,
+      endedAt: Date.now(),
+      playedSeconds,
+      duration,
+      percentPlayed,
+      skipped,
+      reason: finalReason,
+    };
+    liveHistoryEntry = null;
+    requestHistoryRender();
+    activeSession = null;
+    addHistoryEntry(entry).catch(err => {
+      console.error('Failed recording play history', err);
+    });
   };
 
   const readAnnouncePreference = () => {
@@ -1541,6 +2252,7 @@
   async function scanFolder(dirHandle) {
     setFolderPath(dirHandle, { loading: true });
     rootDirName = dirHandle?.name || 'Selected Folder';
+    finalizePlaySession('folder-change', { position: Number.isFinite(audio.currentTime) ? audio.currentTime : undefined });
     tracks = [];
     current = -1;
     pendingAnnouncement = null;
@@ -1798,13 +2510,17 @@
   function seekBy(seconds) {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
     if (!isFinite(audio.currentTime)) return;
-    audio.currentTime = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration));
+    const next = Math.max(0, Math.min(audio.currentTime + seconds, audio.duration));
+    audio.currentTime = next;
   }
 
   async function playIndex(idx, {autoplay=true, skipReason='auto'} = {}) {
     if (!tracks.length) return;
     if (idx < 0) idx = 0;
     if (idx >= tracks.length) idx = tracks.length - 1;
+    if (current >= 0 && current < tracks.length && idx !== current && activeSession) {
+      finalizePlaySession(skipReason, { position: activeSession.lastPosition });
+    }
     current = idx;
 
     const tr = tracks[current];
@@ -1894,6 +2610,51 @@
   applyShuffleState();
   setLoopLabel();
   loadPreferences();
+  loadHistoryEntries();
+
+  if (historyToggleBtn) {
+    historyToggleBtn.addEventListener('click', () => {
+      if (isHistoryVisible()) closeHistoryOverlay();
+      else openHistoryOverlay();
+    });
+  }
+  if (historyCloseBtn) {
+    historyCloseBtn.addEventListener('click', closeHistoryOverlay);
+  }
+  if (historyClearBtn) {
+    historyClearBtn.addEventListener('click', async () => {
+      const hasStoredEntries = Boolean(historyEntries && historyEntries.length);
+      if (!hasStoredEntries && !liveHistoryEntry) {
+        closeHistoryOverlay();
+        return;
+      }
+      const confirmed = window.confirm('Clear all stored history entries? This cannot be undone.');
+      if (!confirmed) return;
+      try {
+        await clearHistoryStore();
+        historyEntries = [];
+        requestHistoryRender();
+      } catch (err) {
+        console.error('Failed clearing history entries', err);
+      }
+    });
+  }
+  if (historyOverlay) {
+    historyOverlay.addEventListener('click', (event) => {
+      if (event.target === historyOverlay) closeHistoryOverlay();
+    });
+    historyOverlay.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeHistoryOverlay();
+      }
+    });
+  }
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && isHistoryVisible()) {
+      closeHistoryOverlay();
+    }
+  });
 
   chooseBtn.addEventListener('click', async () => {
     if (!('showDirectoryPicker' in window)) {
@@ -1976,17 +2737,25 @@
   audio.addEventListener('loadedmetadata', () => {
     tTot.textContent = fmtTime(audio.duration);
     updateMediaSessionPositionState();
+    updateSessionDuration(audio.duration);
   });
   audio.addEventListener('play', () => {
     maybeAnnounceCurrentTrack();
     startVisualizer();
+    beginPlaySession();
+    setLiveEntryState('playing');
+    startListeningClock();
     updateMediaSessionPlaybackState('playing');
     exportCurrentTrack().catch(err => {
       console.error('Failed exporting track to text file', err);
     });
   });
   audio.addEventListener('pause', () => {
-    stopVisualizer({ state: 'paused' });
+    stopListeningClock();
+    if (!audio.ended) {
+      setLiveEntryState('paused');
+      stopVisualizer({ state: 'paused' });
+    }
     updateMediaSessionPlaybackState('paused');
     clearTextFileExport().catch(err => {
       console.error('Failed to clear text file on pause', err);
@@ -1997,16 +2766,22 @@
     const pos = Math.round((audio.currentTime / audio.duration) * 1000);
     seek.value = String(pos);
     tCur.textContent = fmtTime(audio.currentTime);
+    updateSessionPosition(audio.currentTime);
+    requestHistoryRender();
   });
   seek.addEventListener('input', () => {
     if (!isFinite(audio.duration) || audio.duration <= 0) return;
     const pos = Number(seek.value) / 1000;
-    audio.currentTime = audio.duration * pos;
+    const next = audio.duration * pos;
+    audio.currentTime = next;
     updateMediaSessionPositionState();
+    scheduleSeekPositionUpdate(audio.currentTime);
   });
 
   // Track end behavior
   audio.addEventListener('ended', () => {
+    stopListeningClock();
+    finalizePlaySession('completed', { position: audio.duration });
     stopVisualizer({ clear: true, state: 'idle' });
     // If loop one is set, audio.loop handles it.
     if (loopMode === 'one') return;
