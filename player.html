@@ -685,7 +685,7 @@
         <section class="modal-section">
           <h3 class="modal-section-title">Audio Output Device</h3>
           <p class="modal-section-desc">
-            Select which speaker or headset to use for audio playback. Requires browser support for audio output device selection.
+            Select which speaker or headphones to use for audio playback. Requires browser support for audio output device selection.
           </p>
           
           <div class="modal-option">
@@ -2592,6 +2592,7 @@
   let audioSinkSupported = false;
   let selectedSinkId = '';
   let audioDevices = [];
+  const DEVICE_ID_PREVIEW_LENGTH = 8; // Characters to show when device label is unavailable
 
   const checkAudioOutputSupport = () => {
     // Check if setSinkId is supported on HTMLMediaElement
@@ -2636,7 +2637,10 @@
       // If we got no labeled devices, we may need to request permissions first
       if (outputs.length === 0 || outputs.every(d => !d.label)) {
         try {
-          // Request microphone permission to trigger device enumeration with labels
+          // Workaround: Request microphone permission to trigger device enumeration with labels.
+          // Browsers require an active media permission grant before exposing device labels
+          // for privacy reasons. We request audio input permission, which also unlocks
+          // audio output device labels, then immediately release the stream.
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           // Immediately stop all tracks - we only needed this to trigger permission
           stream.getTracks().forEach(track => track.stop());
@@ -2671,7 +2675,7 @@
     devices.forEach(device => {
       const option = document.createElement('option');
       option.value = device.deviceId;
-      option.textContent = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+      option.textContent = device.label || `Device ${device.deviceId.substring(0, DEVICE_ID_PREVIEW_LENGTH)}`;
       audioOutputSelect.appendChild(option);
     });
     
