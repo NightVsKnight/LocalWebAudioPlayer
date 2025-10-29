@@ -683,6 +683,26 @@
       </div>
       <div class="modal-body">
         <section class="modal-section">
+          <h3 class="modal-section-title">Audio Output Device</h3>
+          <p class="modal-section-desc">
+            Select which speaker or headset to use for audio playback. Requires browser support for audio output device selection.
+          </p>
+          
+          <div class="modal-option">
+            <div class="modal-option-label">
+              <div class="modal-option-name">Output Device</div>
+              <div class="modal-option-hint">
+                Choose your preferred audio output device. Changes apply immediately.
+              </div>
+              <div class="modal-option-status" id="audioOutputStatus">Detecting support...</div>
+            </div>
+            <select id="audioOutputSelect" class="viz-select" style="min-width: 200px;" disabled>
+              <option value="">Default Device</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="modal-section">
           <h3 class="modal-section-title">OBS Metadata Export</h3>
           <p class="modal-section-desc">
             Export currently playing track metadata to a text file for use in OBS overlays and streaming software.
@@ -753,6 +773,8 @@
   const configureTextFileBtn = document.getElementById('configureTextFileBtn');
   const textFileStatus = document.getElementById('textFileStatus');
   const toastContainer = document.getElementById('toastContainer');
+  const audioOutputSelect = document.getElementById('audioOutputSelect');
+  const audioOutputStatus = document.getElementById('audioOutputStatus');
 
   /** Persistence */
   const DB_NAME = 'lwa-player';
@@ -770,6 +792,7 @@
   const VOLUME_KEY = 'lwa-volume';
   const TEXT_FILE_HANDLE_KEY = 'text-file-handle';
   const TEXT_FILE_ENABLED_KEY = 'text-file-enabled';
+  const AUDIO_SINK_ID_KEY = 'audio-sink-id';
   const HISTORY_RENDER_LIMIT = 200;
   const HISTORY_MAX_ENTRIES = 500;
   // Play count threshold: A track is counted as "played" if at least 50% of its duration is heard.
@@ -2565,6 +2588,174 @@
     }
   };
 
+  /** Audio Output Device Selection */
+  let audioSinkSupported = false;
+  let selectedSinkId = '';
+  let audioDevices = [];
+
+  const checkAudioOutputSupport = () => {
+    // Check if setSinkId is supported on HTMLMediaElement
+    audioSinkSupported = typeof audio.setSinkId === 'function';
+    return audioSinkSupported;
+  };
+
+  const updateAudioOutputStatus = () => {
+    if (!audioOutputStatus) return;
+    
+    if (!audioSinkSupported) {
+      audioOutputStatus.textContent = 'Not supported in this browser';
+      audioOutputStatus.style.color = 'var(--muted)';
+      if (audioOutputSelect) {
+        audioOutputSelect.disabled = true;
+      }
+      return;
+    }
+    
+    if (audioDevices.length === 0) {
+      audioOutputStatus.textContent = 'No devices found';
+      audioOutputStatus.style.color = 'var(--muted)';
+    } else {
+      const currentDevice = audioDevices.find(d => d.deviceId === selectedSinkId);
+      const deviceName = currentDevice ? currentDevice.label : 'Default Device';
+      audioOutputStatus.textContent = `Active: ${deviceName}`;
+      audioOutputStatus.style.color = 'var(--accent)';
+    }
+  };
+
+  const enumerateAudioOutputDevices = async () => {
+    if (!audioSinkSupported) {
+      audioDevices = [];
+      return audioDevices;
+    }
+
+    try {
+      // First, try to enumerate devices
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let outputs = devices.filter(d => d.kind === 'audiooutput');
+      
+      // If we got no labeled devices, we may need to request permissions first
+      if (outputs.length === 0 || outputs.every(d => !d.label)) {
+        try {
+          // Request microphone permission to trigger device enumeration with labels
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // Immediately stop all tracks - we only needed this to trigger permission
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Now re-enumerate with labels
+          devices = await navigator.mediaDevices.enumerateDevices();
+          outputs = devices.filter(d => d.kind === 'audiooutput');
+        } catch (permErr) {
+          console.warn('Failed to request audio permission for device enumeration', permErr);
+          // Continue with unlabeled devices
+        }
+      }
+      
+      audioDevices = outputs;
+      return outputs;
+    } catch (err) {
+      console.error('Failed to enumerate audio output devices', err);
+      audioDevices = [];
+      return [];
+    }
+  };
+
+  const populateAudioOutputSelect = (devices) => {
+    if (!audioOutputSelect) return;
+    
+    // Clear existing options except the first (default)
+    while (audioOutputSelect.options.length > 1) {
+      audioOutputSelect.remove(1);
+    }
+    
+    // Add device options
+    devices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Device ${device.deviceId.substring(0, 8)}`;
+      audioOutputSelect.appendChild(option);
+    });
+    
+    // Set the current selection
+    audioOutputSelect.value = selectedSinkId;
+    audioOutputSelect.disabled = false;
+  };
+
+  const setAudioOutputDevice = async (sinkId) => {
+    if (!audioSinkSupported) {
+      console.warn('Audio output device selection not supported');
+      return false;
+    }
+    
+    try {
+      await audio.setSinkId(sinkId);
+      selectedSinkId = sinkId;
+      
+      // Persist the selection
+      await putStoreValue(AUDIO_SINK_ID_KEY, sinkId);
+      
+      updateAudioOutputStatus();
+      return true;
+    } catch (err) {
+      console.error('Failed to set audio output device', err);
+      showToast('Failed to set audio output device. The device may no longer be available.', 'error', 'Output Error');
+      return false;
+    }
+  };
+
+  const loadAudioOutputConfig = async () => {
+    // Check support first
+    checkAudioOutputSupport();
+    
+    if (!audioSinkSupported) {
+      updateAudioOutputStatus();
+      return;
+    }
+    
+    // Load saved sink ID
+    try {
+      const savedSinkId = await getStoreValue(AUDIO_SINK_ID_KEY);
+      if (typeof savedSinkId === 'string') {
+        selectedSinkId = savedSinkId;
+      }
+    } catch (err) {
+      console.warn('Failed to load audio sink ID', err);
+    }
+    
+    // Enumerate devices
+    const devices = await enumerateAudioOutputDevices();
+    
+    // Populate the select dropdown
+    populateAudioOutputSelect(devices);
+    
+    // Apply the saved sink ID if we have one
+    if (selectedSinkId) {
+      // Check if the saved device still exists
+      const deviceExists = devices.some(d => d.deviceId === selectedSinkId);
+      if (deviceExists) {
+        await setAudioOutputDevice(selectedSinkId);
+      } else {
+        // Device no longer exists, fall back to default
+        selectedSinkId = '';
+        await putStoreValue(AUDIO_SINK_ID_KEY, '');
+      }
+    }
+    
+    updateAudioOutputStatus();
+  };
+
+  const initAudioOutputDeviceSelection = () => {
+    if (!audioOutputSelect) return;
+    
+    audioOutputSelect.addEventListener('change', async () => {
+      const newSinkId = audioOutputSelect.value;
+      const success = await setAudioOutputDevice(newSinkId);
+      if (success) {
+        showToast('Audio output device changed successfully', 'success', 'Output Changed');
+      }
+    });
+  };
+
+
   const revokeAll = () => {
     tracks.forEach(t => { if (t.url) URL.revokeObjectURL(t.url); });
   };
@@ -3366,6 +3557,14 @@
 
   // Clean up object URLs when leaving
   window.addEventListener('beforeunload', revokeAll);
+
+  // Initialize audio output device selection
+  initAudioOutputDeviceSelection();
+
+  // Load audio output device configuration
+  loadAudioOutputConfig().catch(err => {
+    console.error('Failed to load audio output configuration', err);
+  });
 
   // Load text file export configuration
   loadTextFileConfig().then(() => {

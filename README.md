@@ -118,8 +118,32 @@ The History table includes a **Plays** column showing each track's current total
 - **Layout & accessibility:** Resize below 900 px to confirm the interface collapses cleanly; scroll large libraries while testing keyboard navigation; toggle announcements off/on to validate speech handling.
 - **OS integration & analyzer:** Use Bluetooth or hardware media keys for transport control and check the system media overlay; exercise the spectrum modes with tones, noise, and sweeps from `testmedia/`.
 - **Browser fallback:** Launch in a non-Chromium browser to confirm informative errors for folder picking or OBS export; revoke folder permission and ensure the app re-prompts gracefully.
+- **Audio Output Device:** Open Settings modal and verify the audio output device dropdown is available (Chromium browsers with setSinkId support); select a different output device and verify audio plays through the selected device; reload the page and confirm the selected device persists; disconnect/reconnect devices and verify graceful handling when a saved device is no longer available.
 
 ## Manual Testing
+- **Audio Output Device Selection:** Open the Settings modal (⚙️ Settings button) and verify the "Audio Output Device" section appears.
+- **Audio Output Device Selection:** If using a Chromium-based browser (Chrome, Edge, Opera), verify the status shows "Detecting support..." initially, then updates to show the current device or "No devices found".
+- **Audio Output Device Selection:** If your system has multiple audio output devices (speakers, headphones, etc.), verify they appear in the dropdown list with recognizable names.
+- **Audio Output Device Selection:** Select a different output device from the dropdown and verify:
+  - A success toast notification appears ("Audio output device changed successfully")
+  - The status text updates to show "Active: [Device Name]"
+  - Audio playback switches to the selected device
+- **Audio Output Device Selection:** While a track is playing, change the output device and verify playback continues seamlessly on the new device.
+- **Audio Output Device Selection:** Reload the page and verify:
+  - The previously selected output device is automatically reapplied
+  - The dropdown shows the correct selection
+  - The status text reflects the active device
+- **Audio Output Device Selection:** Disconnect the active audio device (e.g., unplug headphones) and reload the page; verify:
+  - The app gracefully falls back to the default device
+  - The status shows "Default Device" or the new active device
+  - No errors prevent playback
+- **Audio Output Device Selection (Permission Flow):** In a fresh browser profile or after clearing permissions, open Settings and select an audio device; if prompted for microphone permission (needed for device enumeration), grant it and verify:
+  - Device list populates with labeled device names
+  - Selected device is applied correctly
+- **Audio Output Device Selection (Unsupported Browser):** Test in a non-Chromium browser (Firefox, Safari) and verify:
+  - The status shows "Not supported in this browser"
+  - The dropdown is disabled
+  - The feature degrades gracefully without errors
 - **Play Counts:** Load a music folder and verify each track displays a play count area (should be empty initially, showing no count).
 - **Play Counts:** Play a track for less than 50% of its duration (e.g., skip after 30 seconds of a 2-minute track), skip to next track, and verify the play count does NOT increment (remains empty).
 - **Play Counts:** Play a track for at least 50% of its duration (e.g., listen to 90 seconds of a 2-minute track), skip to next track, and verify the play count increments to "▶ 1".
