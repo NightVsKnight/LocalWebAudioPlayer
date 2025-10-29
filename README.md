@@ -61,7 +61,11 @@ Single-page MP3 folder player focused on fast local playback, rich listening his
 
 ## Manual Smoke Checks
 - **Playback basics:** Load a folder, start playback, toggle shuffle/loop, adjust volume via slider and arrow keys, seek, then reload to confirm preferences persist.
-- **Short track names:** Load a folder with files that have YouTube IDs (e.g., `[videoId]`), track numbers (e.g., `01 -`), underscores, or special characters; verify playlist displays clean short titles while hover tooltips show full path; check Now Playing header and History tab also show short titles; enable announcements and confirm spoken names match displayed names.
+- **Short track names:** Load a folder with files that have YouTube IDs (e.g., `[videoId]`), track numbers (e.g., `01 -`), underscores, or special characters.
+  - Verify playlist displays clean short titles.
+  - Hover over playlist items to confirm tooltips show full path.
+  - Check Now Playing header and History tab also show short titles.
+  - Enable announcements and confirm spoken names match displayed names.
 - **History & ratings:** Watch the live history row while playing, pausing, and seeking; Skip forward a few tracks, then step backward with **Prev** until history exhausts; rate several tracks (in playlist and “Now Playing”), reload, and verify ratings persist without triggering playback; Delete a single history row and use **Clear**—both should confirm before removing data.
 - **Percent badges & links:** Finish a track, stop before halfway, and rewind past 100% to observe badge colors; open a history row that embeds a `[videoId]` and confirm the YouTube link resolves.
 - **Streamer workflow:** Enable OBS export, verify the text file updates, pause/stop to ensure it clears, reload to confirm the export remains active, then disable and ensure updates cease.
