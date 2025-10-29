@@ -1611,8 +1611,10 @@
   const resolveYouTubeUrlFromTrack = (track) => {
     if (!track) return null;
     const relativePath = track.path && track.path.length > 0 ? track.path.join('/') : '';
-    const id = extractYouTubeIdFrom(track.displayName || track.name, relativePath);
-    return id ? `https://youtu.be/${id}` : null;
+    return resolveYouTubeUrl({
+      trackName: track.displayName || track.name,
+      relativePath: relativePath
+    });
   };
 
   const isRewoundPercent = (percent) => typeof percent === 'number' && percent > REWIND_RATIO_THRESHOLD;
