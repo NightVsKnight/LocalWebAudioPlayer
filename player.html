@@ -2024,7 +2024,7 @@
       : (Number.isFinite(track.duration) ? track.duration : null);
     activeSession = {
       trackKey: key,
-      trackName: track.displayName || track.name,
+      trackName: details.title || track.displayName || track.name,
       artist: details.artist || '',
       relativePath,
       duration: durationGuess,
@@ -2648,7 +2648,8 @@
 
     const nameEl = document.createElement('div');
     nameEl.className = 'name';
-    nameEl.textContent = track.displayName;
+    const details = buildAnnouncementDetails(track);
+    nameEl.textContent = details.title || track.displayName;
 
     const ratingEl = document.createElement('div');
     ratingEl.className = 'rating';
@@ -2854,6 +2855,7 @@
     const details = recordPendingAnnouncement(tr, { skipReason });
     audio.src = tr.url;
     if (nowTitleEl) {
+      const displayTitle = (details && details.title) ? details.title : tr.displayName;
       const youtubeUrl = resolveYouTubeUrlFromTrack(tr);
       if (youtubeUrl) {
         nowTitleEl.innerHTML = '';
@@ -2862,10 +2864,10 @@
         link.href = youtubeUrl;
         link.target = '_blank';
         link.rel = 'noopener';
-        link.textContent = tr.displayName;
+        link.textContent = displayTitle;
         nowTitleEl.appendChild(link);
       } else {
-        nowTitleEl.textContent = tr.displayName;
+        nowTitleEl.textContent = displayTitle;
       }
     }
     if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
