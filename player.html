@@ -144,6 +144,13 @@
     color: var(--text);
     font-weight: 600;
   }
+  .now-title-link {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .now-title-link:hover {
+    text-decoration: underline;
+  }
 
   .controls {
     display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
@@ -1601,6 +1608,14 @@
     const id = extractYouTubeIdFrom(entry.trackName, entry.relativePath);
     return id ? `https://youtu.be/${id}` : null;
   };
+  const resolveYouTubeUrlFromTrack = (track) => {
+    if (!track) return null;
+    const relativePath = track.path && track.path.length > 0 ? track.path.join('/') : '';
+    return resolveYouTubeUrl({
+      trackName: track.displayName || track.name,
+      relativePath: relativePath
+    });
+  };
 
   const isRewoundPercent = (percent) => typeof percent === 'number' && percent > REWIND_RATIO_THRESHOLD;
   const describeHistoryStatus = (entry) => {
@@ -2838,7 +2853,21 @@
     const tr = tracks[current];
     const details = recordPendingAnnouncement(tr, { skipReason });
     audio.src = tr.url;
-    if (nowTitleEl) nowTitleEl.textContent = tr.displayName;
+    if (nowTitleEl) {
+      const youtubeUrl = resolveYouTubeUrlFromTrack(tr);
+      if (youtubeUrl) {
+        nowTitleEl.innerHTML = '';
+        const link = document.createElement('a');
+        link.className = 'now-title-link';
+        link.href = youtubeUrl;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = tr.displayName;
+        nowTitleEl.appendChild(link);
+      } else {
+        nowTitleEl.textContent = tr.displayName;
+      }
+    }
     if (nowArtistEl) nowArtistEl.textContent = (details && details.artist) ? details.artist : '—';
     if (nowTrackNumberEl) nowTrackNumberEl.textContent = fmtTrackNumber(current);
     const key = trackKey(tr);
