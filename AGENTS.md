@@ -32,4 +32,5 @@ No build tooling is configured; the app is static HTML. If you introduce tooling
 ## Agent Tips
 - Respect the File System Access API limitations; absolute paths are unavailable, so expose handle names only.
 - When persisting data, prefer IndexedDB for structured storage and note permission requirements in code comments.
+- When asked to create a GitHub issue, search the tracker first; if a duplicate exists, share the details with the user and confirm they still want a new issue before opening one.
 - When you finish a coding task, include in your response a recommended commit message (max 72 characters) and nicely formatted description.
