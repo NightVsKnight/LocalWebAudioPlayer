@@ -40,6 +40,52 @@ Single-page MP3 folder player focused on fast local playback, rich listening his
 - Ratings persist in IndexedDB, keyed by the track’s relative path, so they survive reloads and rescans of the same folder.
 - Updates stay in sync between the playlist and “Now Playing”, and rating interactions never interrupt playback.
 
+## Play Counts
+
+Automatically track how many times each song has been played to identify your most-listened tracks.
+
+### How It Works
+- Each track displays a play count indicator (▶ #) in the playlist between the rating stars and duration
+- **The currently playing track shows its play count in the "Now Playing" section** between the rating stars and time display
+- Play counts increment automatically when a track is played to completion (≥50% of duration heard)
+- Tracks skipped before reaching 50% do NOT increment the counter, preventing accidental skips from inflating counts
+- Play counts are stored locally in IndexedDB and persist across sessions
+- Play counts are tied to the track's file path and remain even if you rescan the folder
+- The count updates immediately when a track qualifies as "played"
+
+### What Counts as a "Play"
+A track is counted as played when **at least 50% of its duration is heard**. This threshold:
+- Balances genuine listens vs. accidental skips
+- Matches the existing skip detection threshold used in playback history
+- Allows for some seeking/skipping while still counting legitimate listens
+- Prevents double-counting when rewinding and replaying portions
+
+For example:
+- ✓ Play a 3-minute track for 90+ seconds → count increments
+- ✓ Play a 4-minute track to completion → count increments  
+- ✓ Listen to 2 minutes of a 3-minute track, rewind, listen again → count increments once when session ends
+- ✗ Skip after 30 seconds of a 3-minute track → count does NOT increment
+- ✗ Quickly preview several tracks → counts do NOT increment
+
+### Use Cases
+- Identify your most-played tracks at a glance
+- See which songs you listen to repeatedly vs. skip
+- Discover listening patterns over time
+- Combine with ratings to distinguish "favorites I play often" from "favorites I save for special occasions"
+- Use with the History overlay to see both cumulative play counts and individual listen sessions
+
+### In the History Overlay
+The History table includes a **Plays** column showing each track's current total play count. This gives context about:
+- Whether this was the first time hearing a track or the 50th
+- How popular a track is in your overall listening habits
+- The relationship between listen duration and repeat plays
+
+### Data Storage
+- Play counts are stored in your browser's IndexedDB (separate from ratings and history)
+- No external services or cloud storage involved
+- Play counts remain private to your browser and device
+- Clearing browser data or IndexedDB will reset all play counts
+
 ## OBS Metadata Export
 - Configure once via **⚙️ Settings** → **Configure** to pick a text file (e.g., `now-playing.txt`). The player validates write access automatically.
 - While playback is active the file contains `Title – Artist`; it clears on pause, at the end of queues (loop off), or during folder scans.
@@ -72,6 +118,19 @@ Single-page MP3 folder player focused on fast local playback, rich listening his
 - **Layout & accessibility:** Resize below 900 px to confirm the interface collapses cleanly; scroll large libraries while testing keyboard navigation; toggle announcements off/on to validate speech handling.
 - **OS integration & analyzer:** Use Bluetooth or hardware media keys for transport control and check the system media overlay; exercise the spectrum modes with tones, noise, and sweeps from `testmedia/`.
 - **Browser fallback:** Launch in a non-Chromium browser to confirm informative errors for folder picking or OBS export; revoke folder permission and ensure the app re-prompts gracefully.
+
+## Manual Testing
+- **Play Counts:** Load a music folder and verify each track displays a play count area (should be empty initially, showing no count).
+- **Play Counts:** Play a track for less than 50% of its duration (e.g., skip after 30 seconds of a 2-minute track), skip to next track, and verify the play count does NOT increment (remains empty).
+- **Play Counts:** Play a track for at least 50% of its duration (e.g., listen to 90 seconds of a 2-minute track), skip to next track, and verify the play count increments to "▶ 1".
+- **Play Counts:** Play the same track to 50%+ completion multiple times and verify the count increments each time (▶ 2, ▶ 3, etc.).
+- **Play Counts:** Let a track play to natural completion and verify the count increments.
+- **Play Counts:** Reload the page, rescan the same folder, and verify all play counts persist correctly.
+- **Play Counts (Now Playing):** Start playback and verify the "Now Playing" section shows a play count between the rating stars and time (e.g., "▶ 3" or "▶ —" if unplayed).
+- **Play Counts (Now Playing):** Play a track to completion, let it advance to the next track, then return to the first track and verify both the playlist and "Now Playing" show the incremented count.
+- **Play Counts (Now Playing):** Hover over the play count in "Now Playing" and verify a tooltip shows "Played X time(s)" or "Not played yet".
+- **Play Counts (History):** Open the History overlay and verify the table includes a "Plays" column showing current play counts for each track.
+- **Play Counts (History):** Play a track multiple times, open History, and verify the "Plays" column shows the cumulative count across all history entries for that track.
 
 ## Media Downloads
 `yt-dlp` command used to build local libraries:
