@@ -4,13 +4,13 @@ This file provides guidance for GitHub Copilot when working on the Local Web Aud
 
 ## Project Overview
 
-This is a single-page web audio player application that uses modern browser APIs (File System Access API, Web Audio API, Media Session API) to play local audio files. The entire application is contained in `player.html` with no build tooling or dependencies.
+This is a single-page web audio player application that uses modern browser APIs (File System Access API, Web Audio API, Media Session API) to play local audio files. The application consists of `player.html`, `player.css`, and `player.js` with no build tooling or dependencies.
 
 ## Key Architecture Principles
 
 ### Single-File Design
-- All HTML, CSS, and JavaScript are contained in `player.html`
-- Keep code inline unless there's a clear modular benefit
+- HTML, CSS, and JavaScript are separated into `player.html`, `player.css`, and `player.js` respectively
+- Keep code modular and maintainable
 - No bundlers, transpilers, or build steps required
 - The app runs directly in Chromium-based browsers
 
@@ -107,7 +107,9 @@ This is a single-page web audio player application that uses modern browser APIs
 ### Current Structure
 ```
 /
-├── player.html          # Main application file (HTML + CSS + JS)
+├── player.html          # Main application HTML structure
+├── player.css           # Application styles
+├── player.js            # Application logic
 ├── media/              # Optional local assets for manual testing (not shipped)
 ├── README.md           # User-facing documentation and manual test steps
 ├── AGENTS.md           # General repository guidelines for all agents
@@ -117,7 +119,7 @@ This is a single-page web audio player application that uses modern browser APIs
 
 ### Adding Files
 - Supporting assets (icons, fonts) go in `media/` with appropriate subfolders
-- Keep the single-file architecture unless absolutely necessary
+- Keep the separation of concerns (HTML structure, CSS styles, JS logic)
 - Document any new files in README.md and AGENTS.md
 
 ## Common Tasks

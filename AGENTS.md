@@ -1,11 +1,13 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `player.html` – single-page web app with all UI, logic, and styles.
+- `player.html` – main HTML structure for the web app
+- `player.css` – all styles for the application
+- `player.js` – all application logic and interactivity
 - `media/` – optional local assets for manual testing; not shipped.
 - `README.md` – quick-start usage notes. Keep it aligned with UI changes.
 
-Keep any new JS or CSS inline unless a clear modular benefit exists. If you add supporting files (e.g., icons, fonts), place them under `media/` with subfolders as needed.
+The app maintains separation of concerns with HTML, CSS, and JavaScript in separate files. If you add supporting files (e.g., icons, fonts), place them under `media/` with subfolders as needed.
 
 ## Build, Test, and Development Commands
 - `open player.html` (macOS) / `xdg-open player.html` (Linux) – launch the app in a Chromium browser.
