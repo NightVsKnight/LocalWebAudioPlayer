@@ -459,7 +459,24 @@
     padding: 2px 6px; border-radius: 6px; color: var(--text); box-shadow: 0 0 12px rgba(93, 251, 255, 0.12);
   }
   .hide { display: none !important; }
-  .button-group { display: flex; gap: 10px; }
+  .audio-output-control {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .audio-output-control.is-disabled { opacity: 0.6; }
+  .audio-output-icon { font-size: 16px; color: var(--accent); filter: drop-shadow(0 0 6px rgba(93, 251, 255, 0.35)); }
+  .audio-output-select { min-width: 180px; }
+  .header-title { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+  .header-hint { margin: 0; }
+  .header-controls {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .header-controls-left {
+    display: flex; align-items: center; gap: 12px;
+    flex: 1 1 auto; min-width: 260px;
+  }
+  .header-controls-left .folder-path { margin: 0; }
+  .header-controls-right { display: flex; align-items: center; gap: 12px; }
   
   /* Settings modal */
   .modal-backdrop {
@@ -560,14 +577,24 @@
 <body>
   <div class="app" role="application" aria-label="Local MP3 Folder Player">
     <header>
-      <div>
+      <div class="header-title">
         <h1>Local MP3 Folder Player</h1>
-        <div class="hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</div>
-        <div class="folder-path" id="folderPath" aria-live="polite">No folder selected.</div>
-      </div>
-      <div class="button-group">
-        <button class="choose" id="settingsBtn" title="Settings">⚙️ Settings</button>
-        <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
+        <p class="hint header-hint">Choose a folder to scan recursively for <strong>.mp3</strong> files (Chromium browsers).</p>
+        <div class="header-controls">
+          <div class="header-controls-left">
+            <button class="choose" id="chooseBtn">🎵 Choose folder…</button>
+            <div class="folder-path" id="folderPath" aria-live="polite">No folder selected.</div>
+          </div>
+          <div class="header-controls-right">
+            <div class="audio-output-control" id="audioOutputControl" title="Select audio output device">
+              <span class="audio-output-icon" aria-hidden="true">🔈</span>
+              <select id="audioOutputSelect" class="viz-select audio-output-select" aria-label="Audio output device" title="Select audio output device" disabled>
+                <option value="default">Default Device</option>
+              </select>
+            </div>
+            <button class="choose" id="settingsBtn" title="Settings">⚙️ Settings</button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -683,26 +710,6 @@
       </div>
       <div class="modal-body">
         <section class="modal-section">
-          <h3 class="modal-section-title">Audio Output Device</h3>
-          <p class="modal-section-desc">
-            Select which speaker or headphones to use for audio playback. Requires browser support for audio output device selection.
-          </p>
-          
-          <div class="modal-option">
-            <div class="modal-option-label">
-              <div class="modal-option-name">Output Device</div>
-              <div class="modal-option-hint">
-                Choose your preferred audio output device. Changes apply immediately.
-              </div>
-              <div class="modal-option-status" id="audioOutputStatus">Detecting support...</div>
-            </div>
-            <select id="audioOutputSelect" class="viz-select" style="min-width: 200px;" disabled>
-              <option value="">Default Device</option>
-            </select>
-          </div>
-        </section>
-
-        <section class="modal-section">
           <h3 class="modal-section-title">OBS Metadata Export</h3>
           <p class="modal-section-desc">
             Export currently playing track metadata to a text file for use in OBS overlays and streaming software.
@@ -774,7 +781,7 @@
   const textFileStatus = document.getElementById('textFileStatus');
   const toastContainer = document.getElementById('toastContainer');
   const audioOutputSelect = document.getElementById('audioOutputSelect');
-  const audioOutputStatus = document.getElementById('audioOutputStatus');
+  const audioOutputControl = document.getElementById('audioOutputControl');
 
   /** Persistence */
   const DB_NAME = 'lwa-player';
@@ -1367,7 +1374,12 @@
   let vizMode = DEFAULT_VIZ_MODE;
   let vizAudioCtx = null;
   let vizAnalyser = null;
-  let vizSourceNode = null;
+  let vizStreamSourceNode = null;
+  let vizElementSourceNode = null;
+  let vizSilentGainNode = null;
+  let vizUsingCaptureStream = false;
+  let vizCaptureStream = null;
+  let vizAnalyserOutputConnected = false;
   let vizFreqData = null;
   let vizTimeData = null;
   let vizFrame = null;
@@ -1471,7 +1483,136 @@
     return bins;
   };
 
-  const ensureVisualizerNodes = () => {
+  const disconnectVisualizerStreamSource = () => {
+    if (vizStreamSourceNode) {
+      try { vizStreamSourceNode.disconnect(); } catch {}
+    }
+    vizStreamSourceNode = null;
+    vizCaptureStream = null;
+  };
+
+  const disconnectVisualizerElementSource = () => {
+    if (vizElementSourceNode) {
+      try { vizElementSourceNode.disconnect(); } catch {}
+    }
+  };
+
+  const ensureAnalyserOutput = () => {
+    if (!vizAudioCtx || !vizAnalyser) return;
+    if (!vizSilentGainNode) {
+      vizSilentGainNode = vizAudioCtx.createGain();
+      vizSilentGainNode.gain.value = 0;
+    }
+    if (!vizAnalyserOutputConnected) {
+      vizAnalyser.connect(vizSilentGainNode);
+      vizSilentGainNode.connect(vizAudioCtx.destination);
+      vizAnalyserOutputConnected = true;
+    }
+  };
+
+  const attachElementSource = () => {
+    disconnectVisualizerStreamSource();
+    try {
+      if (!vizElementSourceNode) {
+        vizElementSourceNode = vizAudioCtx.createMediaElementSource(audio);
+      }
+      try { vizElementSourceNode.disconnect(); } catch {}
+      vizElementSourceNode.connect(vizAnalyser);
+      ensureAnalyserOutput();
+      vizUsingCaptureStream = false;
+      return true;
+    } catch (err) {
+      console.error('Unable to create MediaElementSource', err);
+      return false;
+    }
+  };
+
+  const attachCaptureStream = (stream) => {
+    if (!stream) return false;
+    disconnectVisualizerStreamSource();
+    disconnectVisualizerElementSource();
+    try {
+      vizCaptureStream = stream;
+      vizStreamSourceNode = vizAudioCtx.createMediaStreamSource(stream);
+      vizStreamSourceNode.connect(vizAnalyser);
+      ensureAnalyserOutput();
+      vizUsingCaptureStream = true;
+      return true;
+    } catch (err) {
+      audioOutputError('visualizer:attach-capture-failed', err);
+      vizUsingCaptureStream = false;
+      return false;
+    }
+  };
+
+  const captureActiveAudioStream = () => {
+    if (typeof audio.captureStream !== 'function') return null;
+    try {
+      const stream = audio.captureStream();
+      if (!stream) return null;
+      const tracks = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks() : [];
+      if (!tracks.length) return null;
+      const hasLiveTrack = tracks.some(track => track.readyState !== 'ended');
+      if (!hasLiveTrack && !stream.active) return null;
+      return stream;
+    } catch (err) {
+      audioOutputWarn('visualizer:capture-error', err);
+      return null;
+    }
+  };
+
+  const isCaptureStreamStale = () => {
+    if (!vizUsingCaptureStream) return true;
+    if (!vizCaptureStream) return true;
+    if (typeof vizCaptureStream.getAudioTracks !== 'function') return true;
+    const tracks = vizCaptureStream.getAudioTracks();
+    if (!tracks.length) return true;
+    return tracks.every(track => track.readyState === 'ended');
+  };
+
+  const refreshVisualizerSource = ({ forceCapture = false } = {}) => {
+    if (!vizAudioCtx || !vizAnalyser) return false;
+    const captureSupported = typeof audio.captureStream === 'function';
+    if (vizUsingCaptureStream && isCaptureStreamStale()) {
+      audioOutputInfo('visualizer:stream-refresh', { mode: 'discard-stale-capture' });
+      disconnectVisualizerStreamSource();
+      vizUsingCaptureStream = false;
+    }
+    if (captureSupported && (forceCapture || !vizUsingCaptureStream)) {
+      const stream = captureActiveAudioStream();
+      if (stream) {
+        const sameStream = stream === vizCaptureStream;
+        if (sameStream && vizStreamSourceNode && !forceCapture) {
+          const tracks = stream.getAudioTracks ? stream.getAudioTracks() : [];
+          const hasLiveTrack = tracks.some(track => track.readyState !== 'ended');
+          if (hasLiveTrack) {
+            return false;
+          }
+        }
+        if (sameStream && forceCapture) {
+          disconnectVisualizerStreamSource();
+        }
+        if (attachCaptureStream(stream)) {
+          audioOutputInfo('visualizer:stream-refresh', { mode: 'capture' });
+          return true;
+        }
+      } else if (forceCapture) {
+        disconnectVisualizerStreamSource();
+      }
+    }
+
+    if (!vizStreamSourceNode && !vizElementSourceNode) {
+      if (attachElementSource()) {
+        audioOutputInfo('visualizer:stream-refresh', { mode: 'element' });
+        return true;
+      }
+    } else if (!vizUsingCaptureStream) {
+      ensureAnalyserOutput();
+    }
+    return false;
+  };
+
+  const ensureVisualizerNodes = ({ forceCapture = false } = {}) => {
     if (!AudioContextCtor || !vizCanvas || !vizCtx) return false;
     if (!vizAudioCtx) {
       try {
@@ -1490,10 +1631,10 @@
       vizAnalyser.minDecibels = -100;
       vizAnalyser.maxDecibels = 0;
     }
-    if (!vizSourceNode) {
-      vizSourceNode = vizAudioCtx.createMediaElementSource(audio);
-      vizSourceNode.connect(vizAnalyser);
-      vizAnalyser.connect(vizAudioCtx.destination);
+    refreshVisualizerSource({ forceCapture });
+    if (!vizStreamSourceNode && !vizElementSourceNode) {
+      audioOutputWarn('visualizer:source-missing', 'No audio source available for visualizer');
+      return false;
     }
     if (vizAudioCtx.state === 'suspended') {
       vizAudioCtx.resume().catch(err => {
@@ -1648,7 +1789,12 @@
   };
 
   const startVisualizer = () => {
-    if (!ensureVisualizerNodes()) return;
+    if (!ensureVisualizerNodes({ forceCapture: true })) return;
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        refreshVisualizerSource({ forceCapture: true });
+      }, 250);
+    }
     if (!vizFrame) {
       vizFrame = requestAnimationFrame(renderVisualizer);
     }
@@ -2320,6 +2466,8 @@
         supported: false,
         speak: () => {},
         cancel: () => {},
+        setVolume: () => {},
+        getVolume: () => 1,
       };
     }
 
@@ -2333,6 +2481,7 @@
     let voice = null;
     let queued = null;
     let awaitingVoices = false;
+    let defaultVolume = 1;
 
     function pickVoice() {
       const voices = synth.getVoices();
@@ -2389,7 +2538,8 @@
         utter.voice = voice;
         utter.lang = voice.lang;
       }
-      utter.volume = opts.volume ?? 1;
+      const requestedVolume = typeof opts.volume === 'number' ? opts.volume : defaultVolume;
+      utter.volume = Math.max(0, Math.min(1, requestedVolume));
       utter.rate = opts.rate ?? 1;
       utter.pitch = opts.pitch ?? 1;
       synth.speak(utter);
@@ -2400,7 +2550,16 @@
       queued = null;
     }
 
-    return { supported: true, speak, cancel };
+    function setVolume(value) {
+      const normalized = Number.isFinite(value) ? value : 1;
+      defaultVolume = Math.max(0, Math.min(1, normalized));
+    }
+
+    function getVolume() {
+      return defaultVolume;
+    }
+
+    return { supported: true, speak, cancel, setVolume, getVolume };
   }
 
   /** Text File Export for OBS */
@@ -2590,49 +2749,135 @@
 
   /** Audio Output Device Selection */
   let audioSinkSupported = false;
-  let selectedSinkId = '';
+  let selectedSinkId = 'default';
   let audioDevices = [];
   const DEVICE_ID_PREVIEW_LENGTH = 8; // Characters to show when device label is unavailable
+  const SINK_SWITCH_RETRY_DELAYS = [75, 150, 400];
+  const RETRYABLE_SINK_ERRORS = new Set(['AbortError', 'NotAllowedError', 'NotFoundError']);
+
+  const debugTimestamp = () => {
+    const ts = new Date().toISOString();
+    return ts.replace('T', ' ').replace('Z', '');
+  };
+  const audioOutputLog = (method, level, ...args) => {
+    const prefix = `[AudioOutput ${debugTimestamp()}]`;
+    const payload = args.length === 1 ? args[0] : args;
+    try {
+      (console[level] || console.log)(prefix, method, payload);
+    } catch {
+      console.log(prefix, method, payload);
+    }
+  };
+  const audioOutputInfo = (method, ...args) => audioOutputLog(method, 'info', ...args);
+  const audioOutputWarn = (method, ...args) => audioOutputLog(method, 'warn', ...args);
+  const audioOutputError = (method, ...args) => audioOutputLog(method, 'error', ...args);
+  const audioOutputDebug = (method, ...args) => audioOutputLog(method, 'log', ...args);
+
+  const describeDeviceForLog = (device) => {
+    if (!device) return 'Unknown device';
+    const base = device.label || (device.deviceId ? `Device ${device.deviceId.substring(0, DEVICE_ID_PREVIEW_LENGTH)}` : 'Unnamed device');
+    if (!device.deviceId) return base;
+    return `${base} [${device.deviceId}]`;
+  };
+  const normalizeSinkId = (sinkId) => {
+    if (!sinkId) return 'default';
+    return sinkId === 'undefined' ? 'default' : sinkId;
+  };
+  const getDeviceBySinkId = (sinkId) => {
+    const normalized = normalizeSinkId(sinkId);
+    return audioDevices.find(d => d.deviceId === normalized);
+  };
+  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const tryUpgradeVisualizerToCaptureStream = () => {
+    if (!vizAudioCtx || !vizAnalyser) return false;
+    const upgraded = refreshVisualizerSource({ forceCapture: true });
+    if (upgraded && vizUsingCaptureStream) {
+      audioOutputInfo('visualizer:upgrade-to-capture', { success: true });
+    }
+    return upgraded;
+  };
 
   const checkAudioOutputSupport = () => {
     // Check if setSinkId is supported on HTMLMediaElement
     audioSinkSupported = typeof audio.setSinkId === 'function';
+    audioOutputInfo('support-check', { supported: audioSinkSupported });
     return audioSinkSupported;
   };
 
   const updateAudioOutputStatus = () => {
-    if (!audioOutputStatus) return;
+    if (!audioOutputSelect) return;
+
+    const applyState = (disabled, title) => {
+      audioOutputSelect.disabled = disabled;
+      const resolvedTitle = title || (disabled ? 'Audio output device selection unavailable.' : 'Select audio output device');
+      audioOutputSelect.title = resolvedTitle;
+      if (audioOutputControl) {
+        audioOutputControl.classList.toggle('is-disabled', Boolean(disabled));
+        audioOutputControl.title = resolvedTitle;
+      }
+    };
     
     if (!audioSinkSupported) {
-      audioOutputStatus.textContent = 'Not supported in this browser';
-      audioOutputStatus.style.color = 'var(--muted)';
-      if (audioOutputSelect) {
-        audioOutputSelect.disabled = true;
-      }
+      applyState(true, 'Audio output selection not supported in this browser.');
+      audioOutputInfo('status-update', { state: 'unsupported' });
+      audioOutputSelect.value = 'default';
       return;
     }
     
     if (audioDevices.length === 0) {
-      audioOutputStatus.textContent = 'No devices found';
-      audioOutputStatus.style.color = 'var(--muted)';
-    } else {
-      const currentDevice = audioDevices.find(d => d.deviceId === selectedSinkId);
-      const deviceName = currentDevice ? currentDevice.label : 'Default Device';
-      audioOutputStatus.textContent = `Active: ${deviceName}`;
-      audioOutputStatus.style.color = 'var(--accent)';
+      applyState(true, 'No audio output devices found.');
+      audioOutputInfo('status-update', { state: 'no-devices' });
+      return;
     }
+
+    applyState(false, 'Select audio output device');
+    
+    const resolvedSinkId = selectedSinkId || 'default';
+    const currentDevice = audioDevices.find(d => d.deviceId === resolvedSinkId);
+    const defaultDevice = audioDevices.find(d => d.deviceId === 'default');
+    if (audioOutputSelect && audioOutputSelect.options.length > 0) {
+      const defaultOption = audioOutputSelect.querySelector('option[value="default"]');
+      if (defaultOption) {
+        const defaultLabel = defaultDevice && defaultDevice.label ? `${defaultDevice.label} (Default)` : 'Default Device';
+        defaultOption.textContent = defaultLabel;
+      }
+    }
+    const deviceName = currentDevice && currentDevice.label
+      ? currentDevice.label
+      : (resolvedSinkId === 'default'
+          ? (defaultDevice && defaultDevice.label ? `${defaultDevice.label} (Default)` : 'Default Device')
+          : describeDeviceForLog(currentDevice));
+    const statusTitle = `Audio output: ${deviceName}`;
+    audioOutputSelect.title = statusTitle;
+    if (audioOutputControl) audioOutputControl.title = statusTitle;
+    audioOutputInfo('status-update', {
+      state: 'active',
+      sinkId: resolvedSinkId,
+      device: currentDevice ? describeDeviceForLog(currentDevice) : 'Default Device'
+    });
   };
 
   const enumerateAudioOutputDevices = async () => {
     if (!audioSinkSupported) {
       audioDevices = [];
+      audioOutputWarn('enumerate:unsupported', 'setSinkId not supported; skipping enumeration');
       return audioDevices;
+    }
+
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.enumerateDevices !== 'function') {
+      audioOutputWarn('enumerate:mediaDevices-missing', 'navigator.mediaDevices.enumerateDevices not available');
+      audioDevices = [];
+      return [];
     }
 
     try {
       // First, try to enumerate devices
       let devices = await navigator.mediaDevices.enumerateDevices();
       let outputs = devices.filter(d => d.kind === 'audiooutput');
+      audioOutputInfo('enumerate:initial', {
+        devices: outputs.map(d => ({ id: d.deviceId, label: d.label, kind: d.kind }))
+      });
       
       // If we got no labeled devices, we may need to request permissions first
       if (outputs.length === 0 || outputs.every(d => !d.label)) {
@@ -2644,27 +2889,45 @@
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           // Immediately stop all tracks - we only needed this to trigger permission
           stream.getTracks().forEach(track => track.stop());
+          audioOutputInfo('enumerate:permission-granted', 'Requested audio permission to reveal labels');
           
           // Now re-enumerate with labels
           devices = await navigator.mediaDevices.enumerateDevices();
           outputs = devices.filter(d => d.kind === 'audiooutput');
         } catch (permErr) {
-          console.warn('Failed to request audio permission for device enumeration', permErr);
+          audioOutputWarn('enumerate:permission-error', permErr);
           // Continue with unlabeled devices
         }
       }
       
       audioDevices = outputs;
+      audioOutputInfo('enumerate:complete', {
+        count: outputs.length,
+        devices: outputs.map(d => ({ id: d.deviceId, label: d.label, kind: d.kind }))
+      });
       return outputs;
     } catch (err) {
-      console.error('Failed to enumerate audio output devices', err);
+      audioOutputError('enumerate:failure', err);
       audioDevices = [];
       return [];
     }
   };
 
-  const populateAudioOutputSelect = (devices) => {
+  const populateAudioOutputSelect = (devices = []) => {
     if (!audioOutputSelect) return;
+    
+    audioOutputInfo('select:populate:start', {
+      deviceCount: devices.length,
+      requestedSelection: selectedSinkId || 'default'
+    });
+
+    const defaultOption = audioOutputSelect.querySelector('option[value="default"]');
+    if (defaultOption) {
+      const defaultDevice = devices.find(d => d.deviceId === 'default');
+      defaultOption.textContent = defaultDevice && defaultDevice.label
+        ? `${defaultDevice.label} (Default)`
+        : 'Default Device';
+    }
     
     // Clear existing options except the first (default)
     while (audioOutputSelect.options.length > 1) {
@@ -2673,40 +2936,132 @@
     
     // Add device options
     devices.forEach(device => {
+      if (!device || device.deviceId === 'default') return;
       const option = document.createElement('option');
       option.value = device.deviceId;
       option.textContent = device.label || `Device ${device.deviceId.substring(0, DEVICE_ID_PREVIEW_LENGTH)}`;
       audioOutputSelect.appendChild(option);
     });
     
-    // Set the current selection
-    audioOutputSelect.value = selectedSinkId;
-    audioOutputSelect.disabled = false;
+    const resolvedSinkId = selectedSinkId || 'default';
+    const hasSelection = resolvedSinkId === 'default' || devices.some(d => d.deviceId === resolvedSinkId);
+    if (!hasSelection && resolvedSinkId !== 'default') {
+      audioOutputWarn('select:populate:missing-selection', {
+        missingSinkId: resolvedSinkId
+      });
+    }
+    
+    audioOutputSelect.value = hasSelection ? resolvedSinkId : 'default';
+    audioOutputSelect.disabled = devices.length === 0;
+
+    audioOutputInfo('select:populate:end', {
+      appliedSelection: audioOutputSelect.value,
+      disabled: audioOutputSelect.disabled
+    });
   };
 
   const setAudioOutputDevice = async (sinkId) => {
     if (!audioSinkSupported) {
-      console.warn('Audio output device selection not supported');
+      audioOutputWarn('sink:set:unsupported', 'Audio output device selection not supported');
       return false;
     }
-    
+
+    const targetSinkId = normalizeSinkId(sinkId);
+    const device = getDeviceBySinkId(targetSinkId);
+    const deviceDescription = device ? describeDeviceForLog(device) : (targetSinkId === 'default' ? 'Default device' : `Unknown device (${targetSinkId})`);
+    audioOutputInfo('sink:set:start', {
+      requestedSinkId: sinkId,
+      normalizedSinkId: targetSinkId,
+      device: deviceDescription
+    });
+
+    tryUpgradeVisualizerToCaptureStream();
+
+    let wasPlaying = false;
     try {
-      await audio.setSinkId(sinkId);
-      selectedSinkId = sinkId;
-      
-      // Persist the selection
-      await putStoreValue(AUDIO_SINK_ID_KEY, sinkId);
-      
-      updateAudioOutputStatus();
-      return true;
-    } catch (err) {
-      console.error('Failed to set audio output device', err);
-      showToast('Failed to set audio output device. The device may no longer be available.', 'error', 'Output Error');
-      return false;
+      wasPlaying = !audio.paused && !audio.ended;
+      if (wasPlaying) {
+        audio.pause();
+        audioOutputDebug('sink:set:paused', { reason: 'prepare setSinkId' });
+      }
+    } catch (pauseErr) {
+      audioOutputWarn('sink:set:pause-failed', pauseErr);
+      wasPlaying = false;
     }
+
+    let lastError = null;
+    const maxAttempts = SINK_SWITCH_RETRY_DELAYS.length + 1;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        audioOutputDebug('sink:set:attempt', {
+          attempt: attempt + 1,
+          totalAttempts: maxAttempts,
+          sinkId: targetSinkId
+        });
+        await audio.setSinkId(targetSinkId);
+        audioOutputInfo('sink:set:success', {
+          attempt: attempt + 1,
+          sinkId: targetSinkId,
+          device: deviceDescription
+        });
+
+        selectedSinkId = targetSinkId;
+        await putStoreValue(AUDIO_SINK_ID_KEY, selectedSinkId);
+
+        if (wasPlaying) {
+          try {
+            await audio.play();
+            audioOutputDebug('sink:set:resumed', { sinkId: targetSinkId });
+          } catch (resumeErr) {
+            audioOutputWarn('sink:set:resume-failed', resumeErr);
+          }
+        }
+
+        updateAudioOutputStatus();
+        return true;
+      } catch (err) {
+        lastError = err;
+        const errorName = err && err.name ? err.name : 'Error';
+        const retryable = RETRYABLE_SINK_ERRORS.has(errorName);
+        audioOutputWarn('sink:set:attempt-failed', {
+          attempt: attempt + 1,
+          sinkId: targetSinkId,
+          error: {
+            name: errorName,
+            message: err && err.message ? err.message : String(err)
+          },
+          retryable
+        });
+
+        if (attempt < SINK_SWITCH_RETRY_DELAYS.length && retryable) {
+          const delay = SINK_SWITCH_RETRY_DELAYS[attempt];
+          audioOutputDebug('sink:set:retry-scheduled', { delayMs: delay });
+          await wait(delay);
+          continue;
+        }
+        break;
+      }
+    }
+
+    audioOutputError('sink:set:failure', {
+      sinkId: targetSinkId,
+      error: lastError
+    });
+    if (wasPlaying) {
+      try {
+        await audio.play();
+        audioOutputDebug('sink:set:resume-after-failure', { sinkId: normalizeSinkId(selectedSinkId) });
+      } catch (resumeErr) {
+        audioOutputWarn('sink:set:resume-after-failure-failed', resumeErr);
+      }
+    }
+    showToast('Failed to set audio output device. The device may no longer be available.', 'error', 'Output Error');
+    return false;
   };
 
   const loadAudioOutputConfig = async () => {
+    audioOutputInfo('config:load:start');
     // Check support first
     checkAudioOutputSupport();
     
@@ -2719,10 +3074,19 @@
     try {
       const savedSinkId = await getStoreValue(AUDIO_SINK_ID_KEY);
       if (typeof savedSinkId === 'string') {
-        selectedSinkId = savedSinkId;
+        const normalized = normalizeSinkId(savedSinkId);
+        selectedSinkId = normalized;
+        if (normalized !== savedSinkId) {
+          await putStoreValue(AUDIO_SINK_ID_KEY, normalized);
+          audioOutputInfo('config:load:normalized-sink', { original: savedSinkId, normalized });
+        }
       }
     } catch (err) {
-      console.warn('Failed to load audio sink ID', err);
+      audioOutputWarn('config:load:saved-sink-error', err);
+    }
+
+    if (!selectedSinkId) {
+      selectedSinkId = 'default';
     }
     
     // Enumerate devices
@@ -2732,18 +3096,27 @@
     populateAudioOutputSelect(devices);
     
     // Apply the saved sink ID if we have one
-    if (selectedSinkId) {
-      // Check if the saved device still exists
-      const deviceExists = devices.some(d => d.deviceId === selectedSinkId);
-      if (deviceExists) {
-        await setAudioOutputDevice(selectedSinkId);
+    const normalizedSelection = normalizeSinkId(selectedSinkId);
+    const deviceExists = normalizedSelection === 'default' || devices.some(d => d.deviceId === normalizedSelection);
+    if (deviceExists) {
+      if (normalizedSelection !== 'default') {
+        await setAudioOutputDevice(normalizedSelection);
       } else {
-        // Device no longer exists, fall back to default
-        selectedSinkId = '';
-        await putStoreValue(AUDIO_SINK_ID_KEY, '');
+        selectedSinkId = 'default';
+        await putStoreValue(AUDIO_SINK_ID_KEY, 'default');
+        updateAudioOutputStatus();
       }
+    } else {
+      audioOutputWarn('config:load:missing-device', { sinkId: normalizedSelection });
+      // Device no longer exists, fall back to default
+      selectedSinkId = 'default';
+      await putStoreValue(AUDIO_SINK_ID_KEY, 'default');
+      if (audioOutputSelect) {
+        audioOutputSelect.value = 'default';
+      }
+      updateAudioOutputStatus();
     }
-    
+    audioOutputInfo('config:load:complete', { activeSinkId: selectedSinkId });
     updateAudioOutputStatus();
   };
 
@@ -2752,11 +3125,40 @@
     
     audioOutputSelect.addEventListener('change', async () => {
       const newSinkId = audioOutputSelect.value;
+      audioOutputInfo('select:change', { selectedValue: newSinkId });
       const success = await setAudioOutputDevice(newSinkId);
       if (success) {
         showToast('Audio output device changed successfully', 'success', 'Output Changed');
       }
     });
+
+    if (navigator.mediaDevices) {
+      const handleDeviceChange = async () => {
+        try {
+          audioOutputInfo('devicechange:event', 'Audio output devices changed; refreshing list');
+          const devices = await enumerateAudioOutputDevices();
+          populateAudioOutputSelect(devices);
+          const normalizedSelection = normalizeSinkId(selectedSinkId);
+          const selectionExists = normalizedSelection === 'default' || devices.some(d => d.deviceId === normalizedSelection);
+          if (!selectionExists) {
+            audioOutputWarn('devicechange:selection-missing', { sinkId: normalizedSelection });
+            selectedSinkId = 'default';
+            if (audioOutputSelect) {
+              audioOutputSelect.value = 'default';
+            }
+            await putStoreValue(AUDIO_SINK_ID_KEY, 'default');
+          }
+          updateAudioOutputStatus();
+        } catch (err) {
+          audioOutputError('devicechange:handler-error', err);
+        }
+      };
+      if (typeof navigator.mediaDevices.addEventListener === 'function') {
+        navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+      } else if ('ondevicechange' in navigator.mediaDevices) {
+        navigator.mediaDevices.ondevicechange = handleDeviceChange;
+      }
+    }
   };
 
 
@@ -3145,7 +3547,11 @@
     audio.volume = clampedValue / 100;
     if (volumeSlider) volumeSlider.value = String(clampedValue);
     if (volumeDisplay) volumeDisplay.textContent = `${clampedValue}%`;
-    
+
+    if (speech && typeof speech.setVolume === 'function') {
+      speech.setVolume(audio.volume);
+    }
+
     if (persist) {
       putStoreValue(VOLUME_KEY, clampedValue).catch(err => {
         console.error('Failed storing volume preference', err);
@@ -3208,6 +3614,10 @@
     seek.value = 0;
     tCur.textContent = '0:00';
     tTot.textContent = isFinite(tr.duration) ? fmtTime(tr.duration) : '0:00';
+
+    if (vizAudioCtx && vizAnalyser) {
+      refreshVisualizerSource({ forceCapture: true });
+    }
 
     if (autoplay) {
       try { await audio.play(); playPauseBtn.textContent = '⏸ Pause'; }
