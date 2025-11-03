@@ -145,3 +145,8 @@ yt-dlp -x --audio-format mp3 {URL}
 - `Sonic Electronix – Test Tones`: `yt-dlp -x --audio-format mp3 PLzFvCAfIq7a2SIBfDhpCytfJ4RHVb_KLY`
 
 ## TODO
+- Split into .css and .js file
+
+## Experimental Desktop Shells
+- [**./prototypes/tauri/**](./prototypes/tauri/) – Rust/Tauri wrapper around bespoke copy of `player.html` to run as a native app.
+- [**./prototypes/qt/**](./prototypes/qt/) – C++/Qt wrapper around bespoke copy of `player.html` to run as a native app.

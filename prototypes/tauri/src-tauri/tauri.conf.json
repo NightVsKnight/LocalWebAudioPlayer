@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Local Web Audio Player",
+  "version": "0.1.0",
+  "identifier": "com.nightvsknight.localwebaudioplayer",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "**"
+        ]
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "Local Web Audio Player",
+        "width": 1280,
+        "height": 900,
+        "resizable": false,
+        "fullscreen": false
+      }
+    ]
+  }
+}

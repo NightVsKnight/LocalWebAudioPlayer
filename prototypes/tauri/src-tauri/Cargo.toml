@@ -1,0 +1,15 @@
+[package]
+name = "local_web_audio_player"
+version = "0.1.0"
+edition = "2021"
+authors = ["NightVsKnight"]
+description = "Desktop shell for the Local Web Audio Player single-page app."
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2.5.1", features = [] }
+
+[dependencies]
+tauri = { version = "2.9.2", features = ["protocol-asset", "wry"] }
+serde = { version = "1", features = ["derive"] }
+rfd = "0.15"

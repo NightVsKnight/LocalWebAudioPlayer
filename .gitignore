@@ -1,12 +1,19 @@
 
 .DS_Store
 
+.scratch.txt
+scratch/
+
 media/
 
 Jellyfin-Title-Speaker
 YouTube-Title-Speaker
 
-.scratch.txt
 LocalWebAudioPlayer.code-workspace
+*.user
 
-scratch/
+prototypes/tauri/src-tauri/gen/
+prototypes/tauri/src-tauri/target/
+
+prototypes/qt/build/
+prototypes/qt/build-test/
