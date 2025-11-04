@@ -1,6 +1,6 @@
 # Local Web Audio Player
 
-Single-page MP3 folder player focused on fast local playback, rich listening history, and streamer-friendly tooling, all bundled into one `player.html`.
+Single-page MP3 folder player focused on fast local playback, rich listening history, and streamer-friendly tooling. The app uses `player.html` with separate `player.css` and `player.js` files.
 
 ## Why This Exists
 - YouTube/YouTube Music insert too many ads.
