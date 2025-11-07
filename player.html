@@ -1971,6 +1971,44 @@
 
 
   const ANNOUNCE_RULES = [
+    // Alex-Productions: "Soundtrack - Epic Cinematic Background Music｜Alex-Productions [QVeiLLbKx2g].mp3"
+    // -> artist: Alex-Productions, track: Soundtrack
+    {
+      matches: (track) => resolveFolderKey(track) === 'alex-productions',
+      format: (name) => {
+        const base = stripTrailingTags(name);
+        // Use the leading segment before the first " - " as the track/title
+        const parts = base.split(' - ');
+        const title = normalizeSpaces(parts[0] || base);
+        return { title, artist: 'Alex-Productions' };
+      },
+    },
+
+    // Pedro Macedo Camacho: "Star Citizen - Day in Paradise [aAiQWNZ6HF4].mp3"
+    // -> artist: Pedro Macedo Camacho, track: Day in Paradise
+    {
+      matches: (track) => resolveFolderKey(track) === 'pedro macedo camacho',
+      format: (name) => {
+        const base = stripTrailingTags(name);
+        // Prefer the second segment after " - " as the track title
+        const parts = base.split(' - ');
+        const title = parts[1] ? normalizeSpaces(parts[1]) : normalizeSpaces(parts[0] || base);
+        return { title, artist: 'Pedro Macedo Camacho' };
+      },
+    },
+
+    // Scott Buckley: "Discovery - Scott Buckley (No Copyright Music) [M8ZwIybVy3o].mp3"
+    // -> artist: Scott Buckley, title: Discovery
+    {
+      matches: (track) => resolveFolderKey(track) === 'scott buckley',
+      format: (name) => {
+        const base = stripTrailingTags(name);
+        // If filename is "Title - Scott Buckley" prefer the first segment as the title
+        const parts = base.split(' - ');
+        const title = normalizeSpaces(parts[0] || base);
+        return { title, artist: 'Scott Buckley' };
+      },
+    },
     {
       matches: (track) => resolveFolderKey(track) === 'utho riley',
       format: (name) => {
